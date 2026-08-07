@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     app_name: str = "Cisco Security Automation Platform"
-    csap_version: str = "0.3.0"
+    csap_version: str = "0.3.1"
     environment: Literal["development", "staging", "production"] = "production"
     log_level: str = "INFO"
 

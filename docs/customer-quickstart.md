@@ -82,7 +82,7 @@ self-signed TLS certificate, downloads the software, starts it and checks it is 
 **You should see** something like:
 
 ```
-[csap] Cisco Security Automation Platform 0.3.0 is running.
+[csap] Cisco Security Automation Platform 0.3.1 is running.
   URL:   https://csap.example.com
   Login: admin@example.com
   Password: 7Kd2mQx9RtLpVn4wHsYb
@@ -101,7 +101,7 @@ docker compose ps
 # postgres, redis, backend, worker, frontend, nginx -- all "Up"
 
 curl -k https://localhost/api/v1/health/ready
-# {"status":"ready","version":"0.3.0"}
+# {"status":"ready","version":"0.3.1"}
 ```
 
 ---

@@ -74,7 +74,7 @@ Drop it once the GHCR images are published and public.
 Expect a few minutes for the first build. The script ends with:
 
 ```
-[csap] Cisco Security Automation Platform 0.3.0 is running.
+[csap] Cisco Security Automation Platform 0.3.1 is running.
   URL:   https://localhost
   Login: admin@example.com
   Password: <generated>
@@ -87,7 +87,7 @@ docker compose ps
 # postgres, redis, backend, worker, frontend, nginx  -- all Up, backend healthy
 
 curl -k https://localhost/api/v1/health/ready
-# {"status":"ready","version":"0.3.0"}
+# {"status":"ready","version":"0.3.1"}
 ```
 
 If a container is restarting: `docker compose logs <service>`.
