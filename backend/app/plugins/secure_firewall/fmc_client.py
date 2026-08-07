@@ -205,3 +205,16 @@ class FmcClient:
 
     def get_object(self, kind: str, object_id: str) -> dict[str, Any]:
         return self.request("GET", self.cfg(f"object/{kind}/{object_id}"))
+
+    # -- access rules ------------------------------------------------------
+    def create_access_rule(self, policy_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request("POST", self.cfg(f"policy/accesspolicies/{policy_id}/accessrules"), json=payload)
+
+    def update_access_rule(self, policy_id: str, rule_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        body = {**payload, "id": rule_id}
+        return self.request(
+            "PUT", self.cfg(f"policy/accesspolicies/{policy_id}/accessrules/{rule_id}"), json=body
+        )
+
+    def delete_access_rule(self, policy_id: str, rule_id: str) -> dict[str, Any]:
+        return self.request("DELETE", self.cfg(f"policy/accesspolicies/{policy_id}/accessrules/{rule_id}"))

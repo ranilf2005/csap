@@ -138,7 +138,7 @@ def validate_change(db: Session, change: ChangeRequest, actor: str | None = None
     if not blocking:
         plan = plugin.plan(rows, discovery)
         change.plan = _plan_to_dict(plan)
-        change.plan["preview"] = plugin.preview(plan)
+        change.plan["preview"] = plugin.preview(plan, host=connection.host)
         change.change_count = plan.total
         change.status = "planned"
 

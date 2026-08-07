@@ -113,7 +113,7 @@ def test_readme_reports_row_counts_and_which_sheets_deploy():
     readme = [r for r in _sheets(_built())["README"] if r and r[0]]
     flat = {str(r[0]): [str(c) for c in r[1:] if c is not None] for r in readme}
     assert flat["Hosts"] == ["1", "yes"]
-    assert flat["AccessRules"] == ["1", "reference only"]
+    assert flat["AccessRules"] == ["1", "yes"]
     assert flat["NatRules"] == ["1", "reference only"]
 
 

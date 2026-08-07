@@ -134,7 +134,7 @@ class SecurityPlugin(ABC):
     def plan(self, rows: dict[str, list[dict[str, Any]]], discovery: DiscoveryResult) -> ChangePlan:
         """Diff the desired state against discovered state."""
 
-    def preview(self, plan: ChangePlan) -> list[dict[str, Any]]:
+    def preview(self, plan: ChangePlan, host: str | None = None) -> list[dict[str, Any]]:
         """The exact calls a real deployment would make, for the operator to review first."""
         return []
 

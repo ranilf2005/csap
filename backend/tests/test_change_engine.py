@@ -143,9 +143,9 @@ def test_unimplemented_engines_fail_loudly():
 
 def test_populated_but_undeployable_sheet_warns_instead_of_silently_ignoring():
     rows = {
-        "AccessRules": [
-            {"action": "create", "policy": "ACP1", "rule_name": "allow-web"},
-            {"action": "create", "policy": "ACP1", "rule_name": "allow-dns"},
+        "NatRules": [
+            {"action": "create", "policy": "NAT1", "rule_name": "nat-1"},
+            {"action": "create", "policy": "NAT1", "rule_name": "nat-2"},
             {"action": "", "policy": "", "rule_name": ""},
         ]
     }
@@ -155,9 +155,9 @@ def test_populated_but_undeployable_sheet_warns_instead_of_silently_ignoring():
     warnings = [i for i in result.issues if i.severity == "warning"]
     assert len(warnings) == 1
     assert "2 row(s)" in warnings[0].message
-    assert warnings[0].sheet == "AccessRules"
+    assert warnings[0].sheet == "NatRules"
 
 
 def test_empty_unsupported_sheet_is_silent():
-    rows = {"AccessRules": [{"action": "", "rule_name": ""}]}
+    rows = {"NatRules": [{"action": "", "rule_name": ""}]}
     assert PLUGIN.validate(rows, _discovery()).issues == []

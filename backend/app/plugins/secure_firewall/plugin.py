@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 from typing import Any
 
@@ -43,11 +44,23 @@ SHEET_MAP: dict[str, tuple[str, str, str]] = {
     "NetworkGroups": ("network_group", "networkgroups", "NetworkGroup"),
 }
 
-# Plain objects must exist before groups can reference them.
-APPLY_ORDER = ["Hosts", "Networks", "Ranges", "Ports", "NetworkGroups"]
+# Plain objects must exist before groups can reference them, and rules come last.
+APPLY_ORDER = ["Hosts", "Networks", "Ranges", "Ports", "NetworkGroups", "AccessRules"]
+
+ACCESS_RULE_SHEET = "AccessRules"
+ACCESS_RULE_ACTIONS = {
+    "ALLOW", "TRUST", "BLOCK", "MONITOR",
+    "BLOCK_RESET", "BLOCK_INTERACTIVE", "BLOCK_RESET_INTERACTIVE",
+}
+NETWORK_COLUMNS = ("source_networks", "destination_networks")
+PORT_COLUMNS = ("source_ports", "destination_ports")
 
 VALID_ACTIONS = {"create", "update", "delete"}
 GROUP_MEMBER_ENTITIES = ("host", "network", "range", "network_group")
+PORT_ENTITIES = ("port", "port_group")
+
+# Sheets the template offers for reference but that cannot be deployed yet.
+UNSUPPORTED_SHEETS = {"NatRules": "a future release"}
 
 # Entities whose workbook row is just name + a single value field.
 VALUE_OBJECT_SHEETS = {"host": "Hosts", "network": "Networks", "range": "Ranges"}
@@ -61,11 +74,18 @@ COMPARE_FIELDS = {
     "NetworkGroups": ["members", "description"],
 }
 
-# Sheets the template offers for reference but that cannot be deployed yet.
-UNSUPPORTED_SHEETS = {
-    "AccessRules": "release 0.4",
-    "NatRules": "release 0.4",
-}
+
+def _split(raw: Any) -> list[str]:
+    return [p.strip() for p in str(raw or "").replace(";", ",").split(",") if p.strip()]
+
+
+def _is_literal(value: str) -> bool:
+    """An address typed straight into a rule cell rather than referencing an object."""
+    try:
+        ipaddress.ip_network(value, strict=False)
+    except ValueError:
+        return False
+    return True
 
 
 class SecureFirewallPlugin(SecurityPlugin):
@@ -470,7 +490,175 @@ class SecureFirewallPlugin(SecurityPlugin):
                 else:
                     issues.extend(self._validate_fields(sheet, index, row, existing, pending))
 
+        issues.extend(self._validate_access_rules(rows, discovery, existing, pending))
         return ValidationResult(issues=issues)
+
+    # -- access rules ------------------------------------------------------
+    @staticmethod
+    def _policies(discovery: DiscoveryResult) -> dict[str, dict[str, Any]]:
+        return {
+            (item.get("name") or "").lower(): item
+            for item in discovery.items
+            if item["item_type"] == "access_policy" and item.get("name")
+        }
+
+    @staticmethod
+    def _rules(discovery: DiscoveryResult) -> dict[tuple[str, str], dict[str, Any]]:
+        index: dict[tuple[str, str], dict[str, Any]] = {}
+        for item in discovery.items:
+            if item["item_type"] != "access_rule" or not item.get("name"):
+                continue
+            policy = str((item["payload"] or {}).get("_policyName") or "").lower()
+            index[(policy, item["name"].lower())] = item
+        return index
+
+    def _validate_access_rules(
+        self,
+        rows: dict[str, list[dict[str, Any]]],
+        discovery: DiscoveryResult,
+        existing: dict[tuple[str, str], dict[str, Any]],
+        pending: set[tuple[str, str]],
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        policies = self._policies(discovery)
+        rules = self._rules(discovery)
+        seen: dict[tuple[str, str], int] = {}
+        sheet = ACCESS_RULE_SHEET
+
+        for index, row in enumerate(rows.get(sheet, []), start=2):
+            action = str(row.get("action", "")).strip().lower()
+            policy = str(row.get("policy", "")).strip()
+            name = str(row.get("rule_name", "")).strip()
+
+            if not action:
+                continue
+            if action not in VALID_ACTIONS:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "action",
+                        f"'{action}' is not create, update or delete",
+                        "Pick create, update or delete from the dropdown, or clear the cell.",
+                    )
+                )
+                continue
+            if not name:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "rule_name", "rule_name is required",
+                        "Enter the rule name exactly as it appears in the access control policy.",
+                    )
+                )
+                continue
+            if not policy:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "policy", "policy is required",
+                        "Enter the access control policy name, for example "
+                        f"'{next(iter(policies.values()), {}).get('name', 'Corp-ACP')}'.",
+                    )
+                )
+                continue
+            if policy.lower() not in policies:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "policy",
+                        f"access control policy '{policy}' does not exist on the FMC",
+                        "Use one of: " + ", ".join(sorted(p["name"] for p in policies.values()))
+                        if policies else "No access control policies were discovered.",
+                    )
+                )
+                continue
+
+            key = (policy.lower(), name.lower())
+            if key in seen:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "rule_name",
+                        f"duplicate of row {seen[key]} in policy '{policy}'",
+                        f"Delete this row or row {seen[key]}. A rule name appears once per policy.",
+                    )
+                )
+            seen.setdefault(key, index)
+
+            if action == "create" and key in rules:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "rule_name",
+                        f"rule '{name}' already exists in policy '{policy}'",
+                        "Change action to update to modify it, or rename the new rule.",
+                    )
+                )
+            if action in {"update", "delete"} and key not in rules:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "rule_name",
+                        f"rule '{name}' does not exist in policy '{policy}'",
+                        "Check the spelling against the exported configuration, "
+                        "or use create to add it.",
+                    )
+                )
+
+            if action == "delete":
+                continue
+
+            rule_action = str(row.get("rule_action", "")).strip().upper()
+            if rule_action not in ACCESS_RULE_ACTIONS:
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "rule_action",
+                        f"'{row.get('rule_action', '')}' is not a valid rule action",
+                        "Use one of: " + ", ".join(sorted(ACCESS_RULE_ACTIONS)),
+                    )
+                )
+
+            issues.extend(self._validate_rule_members(sheet, index, row, existing, pending))
+
+        return issues
+
+    def _validate_rule_members(
+        self,
+        sheet: str,
+        index: int,
+        row: dict[str, Any],
+        existing: dict[tuple[str, str], dict[str, Any]],
+        pending: set[tuple[str, str]],
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+
+        for column in NETWORK_COLUMNS:
+            for member in _split(row.get(column)):
+                if _is_literal(member):
+                    continue
+                known = any(
+                    (e, member.lower()) in existing or (e, member.lower()) in pending
+                    for e in GROUP_MEMBER_ENTITIES
+                )
+                if not known:
+                    issues.append(
+                        ValidationIssue(
+                            "error", sheet, index, column,
+                            f"'{member}' is not a known network object",
+                            f"Correct the spelling, add a create row for '{member}' on the Hosts "
+                            "or Networks sheet, or type a literal address such as 10.1.1.0/24.",
+                        )
+                    )
+
+        for column in PORT_COLUMNS:
+            for member in _split(row.get(column)):
+                known = any(
+                    (e, member.lower()) in existing or (e, member.lower()) in pending
+                    for e in PORT_ENTITIES
+                )
+                if not known:
+                    issues.append(
+                        ValidationIssue(
+                            "error", sheet, index, column,
+                            f"'{member}' is not a known port object",
+                            f"Correct the spelling, or add a create row for '{member}' "
+                            "on the Ports sheet.",
+                        )
+                    )
+        return issues
 
     @staticmethod
     def _normalise(sheet: str, field: str, value: Any) -> str:
@@ -698,6 +886,10 @@ class SecureFirewallPlugin(SecurityPlugin):
         change = ChangePlan()
 
         for sheet in APPLY_ORDER:
+            if sheet == ACCESS_RULE_SHEET:
+                self._plan_access_rules(rows, discovery, existing, change)
+                continue
+
             entity, kind, fmc_type = SHEET_MAP[sheet]
 
             for row in rows.get(sheet, []):
@@ -708,6 +900,7 @@ class SecureFirewallPlugin(SecurityPlugin):
 
                 current = existing.get((entity, name.lower()))
                 entry: dict[str, Any] = {
+                    "target": "object",
                     "sheet": sheet,
                     "kind": kind,
                     "entity": entity,
@@ -731,8 +924,147 @@ class SecureFirewallPlugin(SecurityPlugin):
                     entry["before"] = current.get("payload")
                     change.updates.append(entry)
 
-        change.deletes.reverse()  # groups are removed before their members
+        change.deletes.reverse()  # rules and groups go before the objects they reference
         return change
+
+    def _plan_access_rules(
+        self,
+        rows: dict[str, list[dict[str, Any]]],
+        discovery: DiscoveryResult,
+        existing: dict[tuple[str, str], dict[str, Any]],
+        change: ChangePlan,
+    ) -> None:
+        policies = self._policies(discovery)
+        rules = self._rules(discovery)
+
+        for row in rows.get(ACCESS_RULE_SHEET, []):
+            action = str(row.get("action", "")).strip().lower()
+            policy = str(row.get("policy", "")).strip()
+            name = str(row.get("rule_name", "")).strip()
+            if action not in VALID_ACTIONS or not name or policy.lower() not in policies:
+                continue
+
+            policy_item = policies[policy.lower()]
+            current = rules.get((policy.lower(), name.lower()))
+            entry: dict[str, Any] = {
+                "target": "access_rule",
+                "sheet": ACCESS_RULE_SHEET,
+                "entity": "access_rule",
+                "kind": "accessrules",
+                "name": name,
+                "policy": policy,
+                "policy_id": policy_item.get("external_id"),
+                "action": action,
+            }
+
+            if action == "delete":
+                if not current:
+                    continue
+                entry["id"] = current.get("external_id")
+                entry["before"] = current.get("payload")
+                change.deletes.append(entry)
+                continue
+
+            entry["payload"] = self._build_rule_payload(row, existing)
+            if action == "create":
+                change.creates.append(entry)
+            elif current:
+                entry["id"] = current.get("external_id")
+                entry["before"] = current.get("payload")
+                change.updates.append(entry)
+
+    def _build_rule_payload(
+        self, row: dict[str, Any], existing: dict[tuple[str, str], dict[str, Any]]
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": str(row.get("rule_name", "")).strip(),
+            "type": "AccessRule",
+            "action": str(row.get("rule_action", "ALLOW")).strip().upper() or "ALLOW",
+            "enabled": self._as_bool(row.get("enabled"), default=True),
+            "logBegin": self._as_bool(row.get("log_begin")),
+            "logEnd": self._as_bool(row.get("log_end")),
+        }
+
+        for column, key in zip(NETWORK_COLUMNS, ("sourceNetworks", "destinationNetworks"), strict=True):
+            container = self._network_container(_split(row.get(column)), existing)
+            if container:
+                payload[key] = container
+
+        for column, key in zip(PORT_COLUMNS, ("sourcePorts", "destinationPorts"), strict=True):
+            container = self._port_container(_split(row.get(column)), existing)
+            if container:
+                payload[key] = container
+
+        comment = str(row.get("comment", "") or "").strip()
+        if comment:
+            payload["newComments"] = [comment]
+        return payload
+
+    @staticmethod
+    def _as_bool(value: Any, default: bool = False) -> bool:
+        text = str(value if value is not None else "").strip().lower()
+        if text in {"true", "yes", "1", "y"}:
+            return True
+        if text in {"false", "no", "0", "n"}:
+            return False
+        return default
+
+    @staticmethod
+    def _network_container(
+        names: list[str], existing: dict[tuple[str, str], dict[str, Any]]
+    ) -> dict[str, Any]:
+        objects, literals = [], []
+        for member in names:
+            resolved = next(
+                (
+                    existing[(entity, member.lower())]
+                    for entity in GROUP_MEMBER_ENTITIES
+                    if (entity, member.lower()) in existing
+                ),
+                None,
+            )
+            if resolved:
+                objects.append(
+                    {
+                        "id": resolved.get("external_id"),
+                        "type": resolved["payload"].get("type", "Network"),
+                        "name": resolved.get("name"),
+                    }
+                )
+            elif _is_literal(member):
+                literals.append(
+                    {"type": "Host" if "/" not in member else "Network", "value": member}
+                )
+        container: dict[str, Any] = {}
+        if objects:
+            container["objects"] = objects
+        if literals:
+            container["literals"] = literals
+        return container
+
+    @staticmethod
+    def _port_container(
+        names: list[str], existing: dict[tuple[str, str], dict[str, Any]]
+    ) -> dict[str, Any]:
+        objects = []
+        for member in names:
+            resolved = next(
+                (
+                    existing[(entity, member.lower())]
+                    for entity in PORT_ENTITIES
+                    if (entity, member.lower()) in existing
+                ),
+                None,
+            )
+            if resolved:
+                objects.append(
+                    {
+                        "id": resolved.get("external_id"),
+                        "type": resolved["payload"].get("type", "ProtocolPortObject"),
+                        "name": resolved.get("name"),
+                    }
+                )
+        return {"objects": objects} if objects else {}
 
     def _build_payload(
         self,
@@ -782,35 +1114,55 @@ class SecureFirewallPlugin(SecurityPlugin):
         return payload
 
     # -- deployment --------------------------------------------------------
-    def preview(self, plan: ChangePlan) -> list[dict[str, Any]]:
-        """Render the plan as the FMC REST calls it will make, so nothing is applied blind."""
-        base = "/api/fmc_config/v1/domain/{domainUUID}"
+    @staticmethod
+    def _endpoint(entry: dict[str, Any]) -> tuple[str, str]:
+        """(method, path) for one planned operation, relative to the config API root."""
+        if entry.get("target") == "access_rule":
+            base = f"policy/accesspolicies/{entry.get('policy_id', '')}/accessrules"
+        else:
+            base = f"object/{entry['kind']}"
+
+        if entry["action"] == "create":
+            return "POST", base
+        return ("PUT" if entry["action"] == "update" else "DELETE", f"{base}/{entry.get('id', '')}")
+
+    def preview(self, plan: ChangePlan, host: str | None = None) -> list[dict[str, Any]]:
+        """Render the plan as the exact calls it will make, so nothing is applied blind."""
+        target = host or "<fmc>"
+        root = f"https://{target}/api/fmc_config/v1/domain/{{domainUUID}}"
         calls: list[dict[str, Any]] = []
 
-        for entry in plan.creates:
-            calls.append({
-                "method": "POST",
-                "path": f"{base}/object/{entry['kind']}",
-                "name": entry["name"],
-                "action": "create",
-                "body": entry.get("payload"),
-            })
-        for entry in plan.updates:
-            calls.append({
-                "method": "PUT",
-                "path": f"{base}/object/{entry['kind']}/{entry.get('id', '')}",
-                "name": entry["name"],
-                "action": "update",
-                "body": {**(entry.get("payload") or {}), "id": entry.get("id", "")},
-            })
-        for entry in plan.deletes:
-            calls.append({
-                "method": "DELETE",
-                "path": f"{base}/object/{entry['kind']}/{entry.get('id', '')}",
-                "name": entry["name"],
-                "action": "delete",
-                "body": None,
-            })
+        for entry in plan.creates + plan.updates + plan.deletes:
+            method, suffix = self._endpoint(entry)
+            url = f"{root}/{suffix}"
+            body: dict[str, Any] | None = None
+            if entry["action"] == "create":
+                body = entry.get("payload")
+            elif entry["action"] == "update":
+                body = {**(entry.get("payload") or {}), "id": entry.get("id", "")}
+
+            command = [
+                f"curl -k -X {method} \\",
+                f"  '{url}' \\",
+                "  -H 'Content-Type: application/json' \\",
+                "  -H \"X-auth-access-token: $TOKEN\"",
+            ]
+            if body is not None:
+                rendered = json.dumps(body, indent=2)
+                command[-1] += " \\"
+                command.append(f"  -d '{rendered}'")
+
+            calls.append(
+                {
+                    "method": method,
+                    "path": url,
+                    "name": entry["name"],
+                    "action": entry["action"],
+                    "entity": entry.get("entity", ""),
+                    "body": body,
+                    "cli": "\n".join(command),
+                }
+            )
         return calls
 
     def deploy(
@@ -842,41 +1194,56 @@ class SecureFirewallPlugin(SecurityPlugin):
 
         with self._client(ctx) as fmc:
             for position, entry in enumerate(operations, start=1):
-                action, kind = entry["action"], entry["kind"]
+                action = entry["action"]
+                is_rule = entry.get("target") == "access_rule"
                 try:
                     if action == "create":
-                        created = fmc.create_object(kind, entry["payload"])
-                        details.append(
-                            {
-                                **entry,
-                                "status": "created",
-                                "id": created.get("id"),
-                                "undo": {"action": "delete", "kind": kind, "id": created.get("id")},
+                        if is_rule:
+                            created = fmc.create_access_rule(entry["policy_id"], entry["payload"])
+                            undo = {
+                                "target": "access_rule", "action": "delete",
+                                "policy_id": entry["policy_id"], "id": created.get("id"),
                             }
-                        )
+                        else:
+                            created = fmc.create_object(entry["kind"], entry["payload"])
+                            undo = {
+                                "target": "object", "action": "delete",
+                                "kind": entry["kind"], "id": created.get("id"),
+                            }
+                        details.append({**entry, "status": "created", "id": created.get("id"), "undo": undo})
+
                     elif action == "update":
-                        fmc.update_object(kind, entry["id"], entry["payload"])
-                        details.append(
-                            {
-                                **entry,
-                                "status": "updated",
-                                "undo": {
-                                    "action": "update",
-                                    "kind": kind,
-                                    "id": entry["id"],
-                                    "payload": entry.get("before"),
-                                },
+                        if is_rule:
+                            fmc.update_access_rule(entry["policy_id"], entry["id"], entry["payload"])
+                            undo = {
+                                "target": "access_rule", "action": "update",
+                                "policy_id": entry["policy_id"], "id": entry["id"],
+                                "payload": entry.get("before"),
                             }
-                        )
+                        else:
+                            fmc.update_object(entry["kind"], entry["id"], entry["payload"])
+                            undo = {
+                                "target": "object", "action": "update",
+                                "kind": entry["kind"], "id": entry["id"],
+                                "payload": entry.get("before"),
+                            }
+                        details.append({**entry, "status": "updated", "undo": undo})
+
                     else:
-                        fmc.delete_object(kind, entry["id"])
-                        details.append(
-                            {
-                                **entry,
-                                "status": "deleted",
-                                "undo": {"action": "create", "kind": kind, "payload": entry.get("before")},
+                        if is_rule:
+                            fmc.delete_access_rule(entry["policy_id"], entry["id"])
+                            undo = {
+                                "target": "access_rule", "action": "create",
+                                "policy_id": entry["policy_id"], "payload": entry.get("before"),
                             }
-                        )
+                        else:
+                            fmc.delete_object(entry["kind"], entry["id"])
+                            undo = {
+                                "target": "object", "action": "create",
+                                "kind": entry["kind"], "payload": entry.get("before"),
+                            }
+                        details.append({**entry, "status": "deleted", "undo": undo})
+
                     applied += 1
                 except FmcError as exc:
                     failed += 1
@@ -898,14 +1265,24 @@ class SecureFirewallPlugin(SecurityPlugin):
         with self._client(ctx) as fmc:
             for entry in undoable:
                 undo = entry["undo"]
+                is_rule = undo.get("target") == "access_rule"
                 try:
                     if undo["action"] == "delete":
-                        fmc.delete_object(undo["kind"], undo["id"])
+                        if is_rule:
+                            fmc.delete_access_rule(undo["policy_id"], undo["id"])
+                        else:
+                            fmc.delete_object(undo["kind"], undo["id"])
                     elif undo["action"] == "update":
-                        fmc.update_object(undo["kind"], undo["id"], undo["payload"])
+                        if is_rule:
+                            fmc.update_access_rule(undo["policy_id"], undo["id"], undo["payload"])
+                        else:
+                            fmc.update_object(undo["kind"], undo["id"], undo["payload"])
                     else:
                         payload = {k: v for k, v in (undo.get("payload") or {}).items() if k != "id"}
-                        fmc.create_object(undo["kind"], payload)
+                        if is_rule:
+                            fmc.create_access_rule(undo["policy_id"], payload)
+                        else:
+                            fmc.create_object(undo["kind"], payload)
                     applied += 1
                     details.append({"name": entry.get("name"), "status": "reverted"})
                 except FmcError as exc:

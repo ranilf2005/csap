@@ -72,15 +72,19 @@
     {% if preview %}
     <p class="mb-2">
       <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#rest-preview">
-        Review the {{ preview | length }} API call(s) this will send &#9662;
+        Show the {{ preview | length }} command(s) that will be sent to the FMC &#9662;
       </a>
-      <span class="text-secondary small ms-2">Check these before applying.</span>
+      <span class="text-secondary small ms-2">Review these before applying.</span>
     </p>
     <div class="collapse mb-3" id="rest-preview">
-      <pre class="bg-dark text-light p-3 rounded small mb-0" style="max-height:320px;overflow:auto">{% for call in preview %}
-{{ call.method }} {{ call.path }}
-{% if call.body %}{{ call.body | tojson(indent=2) }}{% endif %}
+      <pre class="bg-dark text-light p-3 rounded small mb-0" style="max-height:420px;overflow:auto">{% for call in preview %}# {{ loop.index }}. {{ call.action }} {{ call.entity }} "{{ call.name }}"
+{{ call.cli }}
+
 {% endfor %}</pre>
+      <div class="form-text">
+        $TOKEN is the FMC session token CSAP obtains at deploy time.
+        Copy any command to reproduce or verify it yourself.
+      </div>
     </div>
     {% endif %}
 
