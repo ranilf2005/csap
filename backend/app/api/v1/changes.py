@@ -164,6 +164,12 @@ def deploy(
         raise HTTPException(status.HTTP_409_CONFLICT, "This change has no plan; fix validation errors first")
     if change.error_count:
         raise HTTPException(status.HTTP_409_CONFLICT, "This change still has validation errors")
+    if not payload.dry_run and change.warning_count and not payload.acknowledge_warnings:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This change has {change.warning_count} unresolved warning(s). Fix them, or confirm "
+            "you have reviewed each one before applying.",
+        )
     if not payload.dry_run and not payload.confirm:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Set confirm=true to apply changes to the live device"

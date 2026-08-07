@@ -320,14 +320,23 @@ async def download_findings(request: Request, change_id: str) -> Response:
 
 @app.post("/changes/{change_id}/deploy")
 async def deploy_change(
-    request: Request, change_id: str, mode: str = Form("dry_run"), engine: str = Form("rest")
+    request: Request,
+    change_id: str,
+    mode: str = Form("dry_run"),
+    engine: str = Form("rest"),
+    acknowledge_warnings: str | None = Form(None),
 ) -> Response:
     dry_run = mode != "apply"
     job = await api(
         request,
         "POST",
         f"/api/v1/changes/{change_id}/deploy",
-        json={"dry_run": dry_run, "engine": engine, "confirm": not dry_run},
+        json={
+            "dry_run": dry_run,
+            "engine": engine,
+            "confirm": not dry_run,
+            "acknowledge_warnings": acknowledge_warnings == "on",
+        },
     )
     return RedirectResponse(f"/jobs/{job['id']}", status_code=status.HTTP_303_SEE_OTHER)
 

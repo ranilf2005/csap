@@ -13,7 +13,7 @@ from app.plugins import registry
 from app.plugins.base import ChangePlan, DeploymentResult, DiscoveryResult, SecurityPlugin
 from app.services import reports
 from app.services.connections import to_context
-from app.services.workbook import WorkbookError, parse_workbook
+from app.services.workbook import WorkbookError, parse_workbook, read_provenance
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,42 @@ def _plugin_for(db: Session, change: ChangeRequest) -> tuple[SecurityPlugin, Con
     if connection is None:
         raise ValueError("the managed system for this change was removed")
     return registry.get(connection.product), connection
+
+
+def _provenance_issues(change: ChangeRequest, snapshot: Snapshot) -> list[dict]:
+    """Block a workbook exported from an older snapshot than the one we are validating against.
+
+    Without this, a second administrator can overwrite changes they never saw.
+    """
+    marks = read_provenance(Path(change.stored_path))
+    source = marks.get("snapshot", "")
+
+    if not source:
+        return [
+            {
+                "severity": "warning", "sheet": "-", "row": None, "field": None,
+                "message": "This workbook was not exported by CSAP, so it cannot be checked "
+                           "against the configuration you started from.",
+                "remediation": "Download 'Current config' from the latest discovery and copy "
+                               "your changes into it, so CSAP can confirm nothing moved "
+                               "underneath you.",
+            }
+        ]
+
+    if source == snapshot.id:
+        return []
+
+    return [
+        {
+            "severity": "error", "sheet": "-", "row": None, "field": None,
+            "message": f"The device configuration changed after this workbook was exported "
+                       f"(exported {marks.get('exported', 'earlier')}). Someone else may have "
+                       f"made changes you cannot see.",
+            "remediation": "Download 'Current config' again from the latest discovery, re-apply "
+                           "your edits to that file and upload it. This prevents overwriting "
+                           "another administrator's work.",
+        }
+    ]
 
 
 def validate_change(db: Session, change: ChangeRequest, actor: str | None = None) -> ChangeRequest:
@@ -90,16 +126,19 @@ def validate_change(db: Session, change: ChangeRequest, actor: str | None = None
         }
         for issue in result.issues
     ]
+    issues = _provenance_issues(change, snapshot) + issues
+    blocking = any(i["severity"] == "error" for i in issues)
 
     change.rows = rows
     change.validation = {"issues": issues}
     change.error_count = sum(1 for i in issues if i["severity"] == "error")
     change.warning_count = sum(1 for i in issues if i["severity"] == "warning")
-    change.status = "validated" if result.is_valid else "invalid"
+    change.status = "validated" if not blocking else "invalid"
 
-    if result.is_valid:
+    if not blocking:
         plan = plugin.plan(rows, discovery)
         change.plan = _plan_to_dict(plan)
+        change.plan["preview"] = plugin.preview(plan)
         change.change_count = plan.total
         change.status = "planned"
 

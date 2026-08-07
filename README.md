@@ -1,5 +1,19 @@
 # Cisco Security Automation Platform (CSAP)
 
+> ### ⚠️ Prototype — use at your own risk
+>
+> This is an **unfinished prototype published for evaluation only**. It is not a product,
+> it is not supported, and it carries no warranty. It is **not affiliated with, endorsed by
+> or supported by Cisco Systems, Inc.** or any other company.
+>
+> **This software makes changes to network security devices.** A mistake can remove firewall
+> rules or break connectivity. You are solely responsible for what you run it against, for
+> taking your own backups, for reviewing every change before applying it, and for the outcome.
+> No author, contributor, employer or affiliated organisation accepts any liability.
+>
+> Test against a **laboratory FMC with a read-only account** first. See [NOTICE](NOTICE) for
+> the full disclaimer and [LICENSE](LICENSE) for the Apache-2.0 terms.
+
 Docker-first automation and governance platform for the Cisco security portfolio.
 Cisco Secure Firewall (FMC) is the first product plugin; ISE, Umbrella, Duo, XDR,
 Secure Access and others plug into the same core without changing it.

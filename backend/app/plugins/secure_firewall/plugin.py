@@ -782,6 +782,37 @@ class SecureFirewallPlugin(SecurityPlugin):
         return payload
 
     # -- deployment --------------------------------------------------------
+    def preview(self, plan: ChangePlan) -> list[dict[str, Any]]:
+        """Render the plan as the FMC REST calls it will make, so nothing is applied blind."""
+        base = "/api/fmc_config/v1/domain/{domainUUID}"
+        calls: list[dict[str, Any]] = []
+
+        for entry in plan.creates:
+            calls.append({
+                "method": "POST",
+                "path": f"{base}/object/{entry['kind']}",
+                "name": entry["name"],
+                "action": "create",
+                "body": entry.get("payload"),
+            })
+        for entry in plan.updates:
+            calls.append({
+                "method": "PUT",
+                "path": f"{base}/object/{entry['kind']}/{entry.get('id', '')}",
+                "name": entry["name"],
+                "action": "update",
+                "body": {**(entry.get("payload") or {}), "id": entry.get("id", "")},
+            })
+        for entry in plan.deletes:
+            calls.append({
+                "method": "DELETE",
+                "path": f"{base}/object/{entry['kind']}/{entry.get('id', '')}",
+                "name": entry["name"],
+                "action": "delete",
+                "body": None,
+            })
+        return calls
+
     def deploy(
         self,
         ctx: ConnectionContext,

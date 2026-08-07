@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3B57")
 REFERENCE_FILL = PatternFill("solid", fgColor="6B7A8C")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 MAX_ROWS_PER_SHEET = 10_000
+
+# Rows beyond the exported data that still offer the dropdowns, so new entries are guided.
+SPARE_ROWS = 500
+
+# Cells the upload path reads back to tell which export a workbook came from.
+PROVENANCE_LABELS = {"snapshot": "Snapshot ID", "exported": "Exported at"}
+
+DROPDOWNS = {
+    "action": '"create,update,delete"',
+    "protocol": '"TCP,UDP"',
+    "enabled": '"true,false"',
+    "log_begin": '"true,false"',
+    "log_end": '"true,false"',
+}
 
 
 def build_workbook(
@@ -21,13 +37,17 @@ def build_workbook(
     product_version: str | None,
     existing: dict[str, list[dict[str, Any]]] | None = None,
     reference_sheets: set[str] | None = None,
+    snapshot_id: str | None = None,
+    snapshot_label: str | None = None,
 ) -> bytes:
     existing = existing or {}
     reference_sheets = reference_sheets or set()
 
     wb = Workbook()
     wb.remove(wb.active)
-    _write_readme(wb, spec, existing, product, product_version, reference_sheets)
+    _write_readme(
+        wb, spec, existing, product, product_version, reference_sheets, snapshot_id, snapshot_label
+    )
 
     for sheet_name, headers in spec.items():
         ws = wb.create_sheet(sheet_name[:31])
@@ -44,13 +64,38 @@ def build_workbook(
         for row in (existing.get(sheet_name) or [])[:MAX_ROWS_PER_SHEET]:
             ws.append([_cell(row.get(header)) for header in headers])
 
+        _add_dropdowns(ws, headers)
         ws.freeze_panes = "A2"
         if ws.max_row > 1:
-            ws.auto_filter.ref = ws.dimensions
+            ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{ws.max_row}"
 
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _add_dropdowns(ws: Any, headers: list[str]) -> None:
+    """Constrain the columns with a fixed vocabulary so users pick instead of typing."""
+    last_row = ws.max_row + SPARE_ROWS
+    for index, header in enumerate(headers, start=1):
+        options = DROPDOWNS.get(header)
+        if not options:
+            continue
+        validation = DataValidation(
+            type="list",
+            formula1=options,
+            allow_blank=True,
+            showDropDown=False,  # openpyxl inverts this: False means "show the arrow"
+            errorTitle="Not an allowed value",
+            error=f"Choose one of: {options.strip('\"')}",
+            promptTitle=header,
+            prompt=f"Leave blank to ignore this row, or choose: {options.strip('\"')}"
+            if header == "action"
+            else f"Choose one of: {options.strip('\"')}",
+        )
+        ws.add_data_validation(validation)
+        column = get_column_letter(index)
+        validation.add(f"{column}2:{column}{last_row}")
 
 
 def _cell(value: Any) -> str:
@@ -156,36 +201,83 @@ def _write_readme(
     product: str,
     product_version: str | None,
     reference_sheets: set[str],
+    snapshot_id: str | None = None,
+    snapshot_label: str | None = None,
 ) -> None:
     ws = wb.create_sheet("README")
-    ws.append(["Cisco Security Automation Platform - change template"])
+    ws.append(["Cisco Security Automation Platform - change workbook"])
     ws["A1"].font = Font(bold=True, size=14)
 
     ws.append([])
     ws.append(["Product", product])
     ws.append(["Detected version", product_version or "unknown"])
+    ws.append([PROVENANCE_LABELS["exported"], datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")])
+    ws.append([PROVENANCE_LABELS["snapshot"], snapshot_id or ""])
+    ws.append(["Taken from", snapshot_label or ""])
+    ws.append([])
+    ws.append(["Do not edit the two rows above. CSAP reads them to confirm you are"])
+    ws.append(["editing the current configuration and not a stale export."])
     ws.append([])
 
+    _section(ws, "HOW TO USE THIS WORKBOOK")
     for line in (
-        "This workbook already contains your current configuration, one row per object.",
+        "1. Every object already on the device is listed, one row per object.",
+        "2. Find the row you want to change, or add a new row at the bottom of the sheet.",
+        "3. Set the 'action' cell on that row. Click the cell and pick from the dropdown.",
+        "4. Save the file and upload it in CSAP under Changes.",
+        "5. Fix anything validation reports, then run a dry run before applying.",
         "",
-        "To change something, set the 'action' column on that row:",
-        "    create   add a new object (use a new row)",
-        "    update   change the object named on that row",
-        "    delete   remove the object named on that row",
-        "",
-        "Rows with a blank 'action' are ignored, so you can leave the rest untouched.",
-        "Column order does not matter. Extra sheets are ignored.",
+        "A row is ONLY acted on if its 'action' cell is set. Blank means ignore.",
+        "That is why you can leave hundreds of rows untouched and change just one.",
     ):
         ws.append([line])
 
     ws.append([])
+    _section(ws, "WHAT EACH ACTION DOES")
+    ws.append(["action", "meaning"])
+    _header_row(ws, 2)
+    for action, meaning in (
+        ("create", "Add a new object. The name must not already exist."),
+        ("update", "Replace the object with this name. List the full desired value."),
+        ("delete", "Remove the object with this name."),
+        ("(blank)", "Ignore this row entirely. This is the default."),
+    ):
+        ws.append([action, meaning])
+
+    ws.append([])
+    _section(ws, "EXAMPLES")
+    ws.append(["Sheet", "action", "What you type", "Result"])
+    _header_row(ws, 4)
+    for example in (
+        ["Hosts", "create", "name=APP01, value=10.1.1.30", "New host object for one IP address"],
+        ["Hosts", "update", "name=WEB01, value=10.1.1.99", "WEB01 now points at 10.1.1.99"],
+        ["Hosts", "delete", "name=OLD-SERVER", "OLD-SERVER is removed from the FMC"],
+        ["Networks", "create", "name=DMZ-NET, value=10.2.0.0/24", "A subnet. The /24 is required"],
+        ["Ranges", "create", "name=POOL, value=10.1.1.10-10.1.1.50", "Contiguous address range"],
+        ["Ports", "create", "name=HTTP-ALT, protocol=TCP, port=8080", "TCP service on port 8080"],
+        ["Ports", "create", "name=HI-PORTS, protocol=UDP, port=9000-9100", "A port range"],
+        ["NetworkGroups", "create", "name=APP-TIER, members=APP01, APP02", "Group of two hosts"],
+        ["NetworkGroups", "update", "name=WEB-TIER, members=WEB01, WEB02, WEB03",
+         "Replaces the members. List them ALL, not just the new one"],
+    ):
+        ws.append(example)
+
+    ws.append([])
+    _section(ws, "COMMON MISTAKES")
+    for line in (
+        "Editing a row but leaving 'action' blank        -> nothing happens. Set action=update.",
+        "Typing a subnet in the Hosts sheet             -> use Networks. Hosts is one IP only.",
+        "Networks value without a prefix (10.2.0.0)     -> add /24 or whatever is correct.",
+        "update on a group listing only the new member  -> the others are removed. List all.",
+        "Two rows with the same name in one sheet       -> rejected. Each object appears once.",
+        "Deleting an object still used by a group       -> remove it from the group first.",
+    ):
+        ws.append([line])
+
+    ws.append([])
+    _section(ws, "SHEETS IN THIS WORKBOOK")
     ws.append(["Sheet", "Rows", "Deployable"])
-    header_row = ws.max_row
-    for col in range(1, 4):
-        cell = ws.cell(row=header_row, column=col)
-        cell.fill = HEADER_FILL
-        cell.font = HEADER_FONT
+    _header_row(ws, 3)
 
     for sheet_name in spec:
         ws.append(
@@ -195,6 +287,9 @@ def _write_readme(
                 "reference only" if sheet_name in reference_sheets else "yes",
             ]
         )
+    ws.append([])
+    ws.append(["'reference only' sheets are shown so you can see the configuration,"])
+    ws.append(["but CSAP cannot deploy them yet. Make those changes in FMC directly."])
 
     truncated = [name for name, rows in existing.items() if len(rows) > MAX_ROWS_PER_SHEET]
     if truncated:
@@ -204,3 +299,17 @@ def _write_readme(
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 46
     ws.column_dimensions["C"].width = 18
+    ws.column_dimensions["D"].width = 52
+
+
+def _section(ws: Any, title: str) -> None:
+    ws.append([title])
+    cell = ws.cell(row=ws.max_row, column=1)
+    cell.font = Font(bold=True, size=12, color="1F3B57")
+
+
+def _header_row(ws: Any, columns: int) -> None:
+    for col in range(1, columns + 1):
+        cell = ws.cell(row=ws.max_row, column=col)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT

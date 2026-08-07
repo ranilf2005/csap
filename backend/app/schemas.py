@@ -171,6 +171,7 @@ class DeployRequest(BaseModel):
     dry_run: bool = True
     engine: str = "rest"
     confirm: bool = False
+    acknowledge_warnings: bool = False
 
 
 # -- reports ----------------------------------------------------------------

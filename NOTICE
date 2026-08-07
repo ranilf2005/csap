@@ -1,0 +1,44 @@
+Cisco Security Automation Platform (CSAP)
+Copyright 2026 The CSAP Authors
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+
+================================================================================
+PROTOTYPE SOFTWARE - READ BEFORE USE
+================================================================================
+
+This is an unfinished prototype, published for evaluation and testing only.
+It is NOT a product, NOT supported, and carries NO warranty of any kind.
+
+It is not affiliated with, endorsed by, or supported by Cisco Systems, Inc. or
+any other company, regardless of the Cisco products it interoperates with.
+"Cisco", "Secure Firewall" and related marks belong to Cisco Systems, Inc. and
+are used here only to describe interoperability.
+
+THIS SOFTWARE MAKES CHANGES TO NETWORK SECURITY DEVICES.
+
+A mistake can remove firewall rules, break connectivity, or weaken your security
+posture. You are solely responsible for what you run it against and for the
+consequences.
+
+By downloading, installing or using this software you accept that:
+
+  * You use it entirely at your own risk.
+  * You are responsible for testing it in a non-production environment first.
+  * You are responsible for taking your own backups before applying any change.
+  * You are responsible for reviewing every change before it is applied, and for
+    the outcome of applying it.
+  * No author, contributor, employer or affiliated organisation accepts any
+    liability for any loss, outage, breach, data loss or damage of any kind,
+    however caused, arising from its use.
+  * There is no support, no maintenance commitment and no guarantee of fitness
+    for any purpose.
+
+As set out in Sections 7 and 8 of the Apache License, Version 2.0, the software
+is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+and no contributor is liable for any damages arising from its use.
+
+Recommended use: a laboratory or non-production Firewall Management Center, with
+a read-only API account, until you have satisfied yourself it behaves correctly
+in your environment.

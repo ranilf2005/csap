@@ -8,6 +8,8 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from app.services.templates import PROVENANCE_LABELS
+
 logger = logging.getLogger(__name__)
 
 MAX_ROWS_PER_SHEET = 20_000
@@ -44,6 +46,34 @@ def parse_workbook(path: Path, expected_sheets: dict[str, list[str]]) -> dict[st
                 "no recognised sheets found; expected one of: " + ", ".join(expected_sheets)
             )
         return rows
+    finally:
+        wb.close()
+
+
+def read_provenance(path: Path) -> dict[str, str]:
+    """Read the export markers CSAP wrote into the README sheet.
+
+    Returns {} for a workbook that did not come from CSAP.
+    """
+    try:
+        wb = load_workbook(path, read_only=True, data_only=True)
+    except Exception:
+        return {}
+
+    try:
+        if "README" not in wb.sheetnames:
+            return {}
+        found: dict[str, str] = {}
+        for row in wb["README"].iter_rows(values_only=True):
+            if not row or row[0] is None or len(row) < 2 or row[1] is None:
+                continue
+            label = str(row[0]).strip()
+            for key, expected in PROVENANCE_LABELS.items():
+                if label == expected:
+                    found[key] = str(row[1]).strip()
+        return found
+    except Exception:
+        return {}
     finally:
         wb.close()
 

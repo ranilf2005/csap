@@ -65,6 +65,8 @@ def _workbook_response(
         snapshot.product_version,
         existing=plugin.existing_rows(discovery) if populated else None,
         reference_sheets=set(plugin.reference_sheets),
+        snapshot_id=snapshot.id,
+        snapshot_label=snapshot.label,
     )
 
     connection = db.get(Connection, snapshot.connection_id)

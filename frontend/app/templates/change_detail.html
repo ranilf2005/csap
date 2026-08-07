@@ -67,6 +67,30 @@
 <div class="card mb-4">
   <div class="card-header fw-semibold">Deploy</div>
   <div class="card-body">
+
+    {% set preview = (change.plan or {}).get('preview', []) %}
+    {% if preview %}
+    <p class="mb-2">
+      <a class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" href="#rest-preview">
+        Review the {{ preview | length }} API call(s) this will send &#9662;
+      </a>
+      <span class="text-secondary small ms-2">Check these before applying.</span>
+    </p>
+    <div class="collapse mb-3" id="rest-preview">
+      <pre class="bg-dark text-light p-3 rounded small mb-0" style="max-height:320px;overflow:auto">{% for call in preview %}
+{{ call.method }} {{ call.path }}
+{% if call.body %}{{ call.body | tojson(indent=2) }}{% endif %}
+{% endfor %}</pre>
+    </div>
+    {% endif %}
+
+    {% if change.warning_count %}
+    <div class="alert alert-warning py-2">
+      This change has <strong>{{ change.warning_count }} warning(s)</strong>. Fix them and
+      re-upload, or confirm below that you have reviewed each one.
+    </div>
+    {% endif %}
+
     <form method="post" action="/changes/{{ change.id }}/deploy" class="row g-3 align-items-end">
       <div class="col-12 col-md-4">
         <label class="form-label" for="mode">Mode</label>
@@ -81,13 +105,39 @@
           <option value="rest">REST API</option>
         </select>
       </div>
-      <div class="col-12 col-md-5">
+      {% if change.warning_count %}
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="acknowledge_warnings" name="acknowledge_warnings">
+          <label class="form-check-label" for="acknowledge_warnings">
+            I have reviewed all {{ change.warning_count }} warning(s) and want to apply anyway
+          </label>
+        </div>
+      </div>
+      {% endif %}
+      <div class="col-12">
         <button class="btn btn-primary"
                 onclick="return this.form.mode.value !== 'apply' || confirm('This writes {{ change.change_count }} change(s) to {{ connection.name if connection else 'the device' }}. Continue?')">
           Run
         </button>
         <span class="text-secondary small ms-2">Always dry run first.</span>
       </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if change.deployment and not change.deployment.get('dry_run') and change.status == 'deployed' %}
+<div class="card mb-4 border-success">
+  <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="fw-semibold text-success">Applied successfully — {{ change.deployment.applied }} operation(s)</div>
+      <div class="text-secondary small">
+        Re-read the device so your baseline matches reality, then download the updated configuration.
+      </div>
+    </div>
+    <form method="post" action="/connections/{{ change.connection_id }}/discover">
+      <button class="btn btn-success">Refresh from FMC and download config</button>
     </form>
   </div>
 </div>
