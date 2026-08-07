@@ -53,6 +53,16 @@
 <div class="alert alert-danger">
   Fix the errors below in the workbook and upload it again. Deployment is blocked while errors remain.
 </div>
+{% elif change.change_count == 0 %}
+<div class="alert alert-warning">
+  <div class="fw-semibold">No changes were found in this workbook — nothing will be deployed.</div>
+  <div class="small mt-1">
+    Every row is ignored unless its <code>action</code> column says <code>create</code>,
+    <code>update</code> or <code>delete</code>. If you edited rows in the exported
+    configuration, set <code>action</code> on those rows and upload again.
+    Any row we spotted as edited-but-ignored is listed as a warning below.
+  </div>
+</div>
 {% elif change.status in ['planned', 'validated'] %}
 <div class="card mb-4">
   <div class="card-header fw-semibold">Deploy</div>

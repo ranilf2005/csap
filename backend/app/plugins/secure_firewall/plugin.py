@@ -52,6 +52,15 @@ GROUP_MEMBER_ENTITIES = ("host", "network", "range", "network_group")
 # Entities whose workbook row is just name + a single value field.
 VALUE_OBJECT_SHEETS = {"host": "Hosts", "network": "Networks", "range": "Ranges"}
 
+# Fields compared against the device to spot a row edited without setting an action.
+COMPARE_FIELDS = {
+    "Hosts": ["value", "description"],
+    "Networks": ["value", "description"],
+    "Ranges": ["value", "description"],
+    "Ports": ["protocol", "port", "description"],
+    "NetworkGroups": ["members", "description"],
+}
+
 # Sheets the template offers for reference but that cannot be deployed yet.
 UNSUPPORTED_SHEETS = {
     "AccessRules": "0.4 (access rule support)",
@@ -247,81 +256,90 @@ class SecureFirewallPlugin(SecurityPlugin):
             return ", ".join(str(v.get("name") or v.get("value") or "") for v in value if isinstance(v, dict))
         return ""
 
+    def _row_for_item(self, item: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        """Render one discovered object as the workbook row that represents it."""
+        entity = item.get("item_type")
+        payload = item.get("payload") or {}
+        name = item.get("name") or ""
+        description = payload.get("description", "") or ""
+
+        if entity in VALUE_OBJECT_SHEETS:
+            return VALUE_OBJECT_SHEETS[entity], {
+                "action": "",
+                "name": name,
+                "value": payload.get("value", ""),
+                "description": description,
+            }
+        if entity == "port":
+            return "Ports", {
+                "action": "",
+                "name": name,
+                "protocol": payload.get("protocol", ""),
+                "port": payload.get("port", ""),
+                "description": description,
+            }
+        if entity == "network_group":
+            return "NetworkGroups", {
+                "action": "",
+                "name": name,
+                "members": self._names(payload),
+                "description": description,
+            }
+        if entity == "access_rule":
+            applications = (payload.get("applications") or {}).get("applications") or []
+            return "AccessRules", {
+                "action": "",
+                "policy": payload.get("_policyName", ""),
+                "rule_name": name,
+                "rule_action": payload.get("action", ""),
+                "enabled": payload.get("enabled", ""),
+                "source_networks": self._names(payload.get("sourceNetworks")),
+                "destination_networks": self._names(payload.get("destinationNetworks")),
+                "source_ports": self._names(payload.get("sourcePorts")),
+                "destination_ports": self._names(payload.get("destinationPorts")),
+                "applications": ", ".join(str(a.get("name", "")) for a in applications),
+                "urls": self._names(payload.get("urls"), literal_key="url"),
+                "log_begin": payload.get("logBegin", ""),
+                "log_end": payload.get("logEnd", ""),
+                "comment": "",
+            }
+        if entity == "nat_rule":
+            return "NatRules", {
+                "action": "",
+                "policy": payload.get("_policyName", ""),
+                "rule_name": name or payload.get("id", ""),
+                "nat_type": payload.get("natType", "") or payload.get("type", ""),
+                "source_interface": self._name_of(payload.get("sourceInterface")),
+                "destination_interface": self._name_of(payload.get("destinationInterface")),
+                "original_source": self._name_of(payload.get("originalSource")),
+                "translated_source": self._name_of(payload.get("translatedSource")),
+                "original_destination": self._name_of(payload.get("originalDestination")),
+                "translated_destination": self._name_of(payload.get("translatedDestination")),
+                "enabled": payload.get("enabled", ""),
+            }
+        return None
+
     def existing_rows(self, discovery: DiscoveryResult) -> dict[str, list[dict[str, Any]]]:
         rows: dict[str, list[dict[str, Any]]] = {sheet: [] for sheet in self.template_spec()}
-
         for item in discovery.items:
-            entity = item.get("item_type")
-            payload = item.get("payload") or {}
-            name = item.get("name") or ""
-            description = payload.get("description", "") or ""
-
-            if entity in VALUE_OBJECT_SHEETS:
-                rows[VALUE_OBJECT_SHEETS[entity]].append(
-                    {
-                        "action": "",
-                        "name": name,
-                        "value": payload.get("value", ""),
-                        "description": description,
-                    }
-                )
-            elif entity == "port":
-                rows["Ports"].append(
-                    {
-                        "action": "",
-                        "name": name,
-                        "protocol": payload.get("protocol", ""),
-                        "port": payload.get("port", ""),
-                        "description": description,
-                    }
-                )
-            elif entity == "network_group":
-                rows["NetworkGroups"].append(
-                    {
-                        "action": "",
-                        "name": name,
-                        "members": self._names(payload),
-                        "description": description,
-                    }
-                )
-            elif entity == "access_rule":
-                applications = (payload.get("applications") or {}).get("applications") or []
-                rows["AccessRules"].append(
-                    {
-                        "action": "",
-                        "policy": payload.get("_policyName", ""),
-                        "rule_name": name,
-                        "rule_action": payload.get("action", ""),
-                        "enabled": payload.get("enabled", ""),
-                        "source_networks": self._names(payload.get("sourceNetworks")),
-                        "destination_networks": self._names(payload.get("destinationNetworks")),
-                        "source_ports": self._names(payload.get("sourcePorts")),
-                        "destination_ports": self._names(payload.get("destinationPorts")),
-                        "applications": ", ".join(str(a.get("name", "")) for a in applications),
-                        "urls": self._names(payload.get("urls"), literal_key="url"),
-                        "log_begin": payload.get("logBegin", ""),
-                        "log_end": payload.get("logEnd", ""),
-                        "comment": "",
-                    }
-                )
-            elif entity == "nat_rule":
-                rows["NatRules"].append(
-                    {
-                        "action": "",
-                        "policy": payload.get("_policyName", ""),
-                        "rule_name": name or payload.get("id", ""),
-                        "nat_type": payload.get("natType", "") or payload.get("type", ""),
-                        "source_interface": self._name_of(payload.get("sourceInterface")),
-                        "destination_interface": self._name_of(payload.get("destinationInterface")),
-                        "original_source": self._name_of(payload.get("originalSource")),
-                        "translated_source": self._name_of(payload.get("translatedSource")),
-                        "original_destination": self._name_of(payload.get("originalDestination")),
-                        "translated_destination": self._name_of(payload.get("translatedDestination")),
-                        "enabled": payload.get("enabled", ""),
-                    }
-                )
-
+            mapped = self._row_for_item(item)
+            if mapped:
+                sheet, row = mapped
+                rows[sheet].append(row)
         return rows
+
+    def _device_rows(self, discovery: DiscoveryResult) -> dict[tuple[str, str], dict[str, Any]]:
+        """Sheet + lowercase name -> the row that represents the object as it is today."""
+        index: dict[tuple[str, str], dict[str, Any]] = {}
+        for item in discovery.items:
+            mapped = self._row_for_item(item)
+            if not mapped:
+                continue
+            sheet, row = mapped
+            key_name = str(row.get("name") or row.get("rule_name") or "").strip().lower()
+            if key_name:
+                index[(sheet, key_name)] = row
+        return index
 
     # -- helpers -----------------------------------------------------------
     @staticmethod
@@ -364,6 +382,7 @@ class SecureFirewallPlugin(SecurityPlugin):
     def validate(self, rows: dict[str, list[dict[str, Any]]], discovery: DiscoveryResult) -> ValidationResult:
         issues: list[ValidationIssue] = []
         existing = self._index(discovery)
+        device_rows = self._device_rows(discovery)
 
         issues.extend(self._unsupported_sheet_warnings(rows))
 
@@ -383,8 +402,24 @@ class SecureFirewallPlugin(SecurityPlugin):
                 action = str(row.get("action", "")).strip().lower()
                 name = str(row.get("name", "")).strip()
 
+                # Two rows naming the same object is always wrong, action or not.
+                if name:
+                    if name.lower() in seen:
+                        issues.append(
+                            ValidationIssue(
+                                "error", sheet, index, "name", f"duplicate of row {seen[name.lower()]}"
+                            )
+                        )
+                    seen.setdefault(name.lower(), index)
+
                 if not action:
+                    issues.extend(
+                        self._blank_action_warnings(
+                            sheet, index, row, name, device_rows.get((sheet, name.lower()))
+                        )
+                    )
                     continue
+
                 if action not in VALID_ACTIONS:
                     issues.append(
                         ValidationIssue(
@@ -395,14 +430,6 @@ class SecureFirewallPlugin(SecurityPlugin):
                 if not name:
                     issues.append(ValidationIssue("error", sheet, index, "name", "name is required"))
                     continue
-
-                if name.lower() in seen:
-                    issues.append(
-                        ValidationIssue(
-                            "error", sheet, index, "name", f"duplicate of row {seen[name.lower()]}"
-                        )
-                    )
-                seen.setdefault(name.lower(), index)
 
                 key = (entity, name.lower())
                 if action == "create" and key in existing:
@@ -420,6 +447,47 @@ class SecureFirewallPlugin(SecurityPlugin):
                     issues.extend(self._validate_fields(sheet, index, row, existing, pending))
 
         return ValidationResult(issues=issues)
+
+    @staticmethod
+    def _normalise(sheet: str, field: str, value: Any) -> str:
+        text = str(value if value is not None else "").strip()
+        if field == "members":
+            parts = sorted(p.strip().lower() for p in text.replace(";", ",").split(",") if p.strip())
+            return ",".join(parts)
+        return text.lower()
+
+    def _blank_action_warnings(
+        self, sheet: str, index: int, row: dict[str, Any], name: str, device_row: dict[str, Any] | None
+    ) -> list[ValidationIssue]:
+        """A row with no action is ignored. Say so when the row clearly meant to change something."""
+        fields = COMPARE_FIELDS.get(sheet, [])
+        if not name or not fields:
+            return []
+
+        if device_row is None:
+            if any(str(row.get(f, "") or "").strip() for f in fields):
+                return [
+                    ValidationIssue(
+                        "warning", sheet, index, "action",
+                        f"'{name}' is not on the FMC and 'action' is blank, so this row is ignored. "
+                        "Set action=create to add it.",
+                    )
+                ]
+            return []
+
+        changed = [
+            f for f in fields
+            if self._normalise(sheet, f, row.get(f)) != self._normalise(sheet, f, device_row.get(f))
+        ]
+        if changed:
+            return [
+                ValidationIssue(
+                    "warning", sheet, index, "action",
+                    f"'{name}' differs from the FMC ({', '.join(changed)}) but 'action' is blank, "
+                    "so this row is ignored. Set action=update to apply it.",
+                )
+            ]
+        return []
 
     def _validate_fields(
         self,
