@@ -188,6 +188,10 @@ def _plan_from_dict(data: dict) -> ChangePlan:
     )
 
 
+# Public alias: the API renders artifacts from a stored plan.
+plan_from_dict = _plan_from_dict
+
+
 def run_deployment(db: Session, job_id: str) -> None:
     """Celery entry point. Applies (or dry-runs) a validated change request."""
     job = db.get(Job, job_id)

@@ -320,6 +320,18 @@ async def download_findings(request: Request, change_id: str) -> Response:
     )
 
 
+@app.get("/changes/{change_id}/artifacts/{engine}")
+async def download_artifacts(request: Request, change_id: str, engine: str) -> Response:
+    resp = await api(request, "GET", f"/api/v1/changes/{change_id}/artifacts/{engine}", raw=True)
+    if resp.status_code >= 400:
+        raise HTTPException(resp.status_code, f"Could not generate the {engine} files")
+    return Response(
+        content=resp.content,
+        media_type="application/zip",
+        headers={"Content-Disposition": resp.headers.get("content-disposition", "attachment")},
+    )
+
+
 @app.post("/changes/{change_id}/deploy")
 async def deploy_change(
     request: Request,

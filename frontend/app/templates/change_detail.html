@@ -157,6 +157,23 @@
         </div>
       </div>
     </form>
+
+    <hr class="my-3">
+
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="fw-semibold me-2">Or take the change to your own pipeline:</span>
+      <a class="btn btn-sm btn-outline-dark" href="/changes/{{ change.id }}/artifacts/ansible">
+        Download Ansible playbook
+      </a>
+      <a class="btn btn-sm btn-outline-dark" href="/changes/{{ change.id }}/artifacts/terraform">
+        Download Terraform config
+      </a>
+    </div>
+    <div class="form-text">
+      CSAP generates these for you to review, commit and run yourself — it does not execute them.
+      Terraform needs the existing objects imported into state before an apply will succeed;
+      the generated README explains how.
+    </div>
   </div>
 </div>
 {% endif %}

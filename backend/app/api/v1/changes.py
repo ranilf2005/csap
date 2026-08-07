@@ -1,4 +1,6 @@
+import io
 import logging
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
@@ -6,6 +8,7 @@ from fastapi.responses import Response
 
 from app.api.deps import CurrentUser, DbSession, record_audit
 from app.models import ChangeRequest, Connection, InventoryItem, Job
+from app.plugins import registry
 from app.schemas import (
     ChangeRequestOut,
     ChangeRequestSummary,
@@ -158,6 +161,46 @@ def revalidate(change_id: str, request: Request, user: CurrentUser, db: DbSessio
         db, request, "change.revalidate", actor=user.email, target_type="change", target_id=change.id
     )
     return change
+
+
+@router.get("/{change_id}/artifacts/{engine}")
+def download_artifacts(
+    change_id: str, engine: str, _user: CurrentUser, db: DbSession
+) -> Response:
+    """The change plan rendered as Ansible or Terraform, zipped."""
+    change = _get_or_404(db, change_id)
+    if not change.plan:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This change has no plan to generate from")
+
+    connection = db.get(Connection, change.connection_id)
+    if connection is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found")
+
+    plugin = registry.get(connection.product)
+    try:
+        files = plugin.render_artifacts(
+            change_service.plan_from_dict(change.plan),
+            engine,
+            change_name=change.filename,
+            host=connection.host,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+    if not files:
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, f"{connection.product} cannot generate {engine}")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for filename, content in files.items():
+            archive.writestr(filename, content)
+
+    stem = safe_filename(change.filename.rsplit(".", 1)[0], "change")
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{stem}_{engine}.zip"'},
+    )
 
 
 @router.get("/{change_id}/targets", response_model=list[DeployTargetOut])

@@ -142,6 +142,12 @@ class SecurityPlugin(ABC):
         """The exact calls a real deployment would make, for the operator to review first."""
         return []
 
+    def render_artifacts(
+        self, plan: ChangePlan, engine: str, change_name: str = "change", host: str = ""
+    ) -> dict[str, str]:
+        """The plan rendered as infrastructure-as-code: filename -> file contents."""
+        return {}
+
     @abstractmethod
     def deploy(
         self,

@@ -20,6 +20,7 @@ from app.plugins.base import (
     ValidationIssue,
     ValidationResult,
 )
+from app.plugins.secure_firewall.engines import render_ansible, render_terraform
 from app.plugins.secure_firewall.fmc_client import FmcAuthError, FmcClient, FmcError
 
 logger = logging.getLogger(__name__)
@@ -1324,6 +1325,15 @@ class SecureFirewallPlugin(SecurityPlugin):
             )
         return calls
 
+    def render_artifacts(
+        self, plan: ChangePlan, engine: str, change_name: str = "change", host: str = ""
+    ) -> dict[str, str]:
+        if engine == "ansible":
+            return render_ansible(plan, change_name, host or "<fmc>")
+        if engine == "terraform":
+            return render_terraform(plan, change_name, host or "<fmc>")
+        raise ValueError(f"'{engine}' cannot be generated; choose ansible or terraform")
+
     def deploy(
         self,
         ctx: ConnectionContext,
@@ -1335,7 +1345,11 @@ class SecureFirewallPlugin(SecurityPlugin):
         if engine not in self.manifest.engines:
             raise ValueError(f"engine '{engine}' not supported by {self.manifest.key}")
         if engine != "rest":
-            raise NotImplementedError(f"the '{engine}' engine is not implemented yet; use 'rest'")
+            raise NotImplementedError(
+                f"CSAP generates {engine} code rather than running it - download it from the "
+                "change page and apply it through your own pipeline. Use the REST engine to "
+                "have CSAP make the change directly."
+            )
 
         operations = plan.creates + plan.updates + plan.deletes
         total = max(len(operations), 1)
