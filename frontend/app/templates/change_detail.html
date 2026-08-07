@@ -95,20 +95,9 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/changes/{{ change.id }}/deploy" class="row g-3 align-items-end">
-      <div class="col-12 col-md-4">
-        <label class="form-label" for="mode">Mode</label>
-        <select class="form-select" id="mode" name="mode">
-          <option value="dry_run">Dry run — change nothing, produce a report</option>
-          <option value="apply">Apply — write changes to the device</option>
-        </select>
-      </div>
-      <div class="col-12 col-md-3">
-        <label class="form-label" for="engine">Engine</label>
-        <select class="form-select" id="engine" name="engine">
-          <option value="rest">REST API</option>
-        </select>
-      </div>
+    <form method="post" action="/changes/{{ change.id }}/deploy" class="row g-3">
+      <input type="hidden" name="engine" value="rest">
+
       {% if change.warning_count %}
       <div class="col-12">
         <div class="form-check">
@@ -119,12 +108,53 @@
         </div>
       </div>
       {% endif %}
+
+      {% if targets %}
       <div class="col-12">
-        <button class="btn btn-primary"
-                onclick="return this.form.mode.value !== 'apply' || confirm('This writes {{ change.change_count }} change(s) to {{ connection.name if connection else 'the device' }}. Continue?')">
-          Run
+        <label class="form-label fw-semibold">Deploy to these devices</label>
+        <div class="border rounded p-2" style="max-height:180px;overflow:auto">
+          {% for t in targets %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="devices"
+                   value="{{ t.id }}" id="dev-{{ t.id }}" checked>
+            <label class="form-check-label" for="dev-{{ t.id }}">
+              {{ t.name }}
+              {% if t.model %}<span class="text-secondary small">— {{ t.model }}</span>{% endif %}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="form-text">
+          Only used by <strong>Push &amp; Deploy</strong>. The FMC deploys to a device only if it
+          actually has pending changes.
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+        <button class="btn btn-outline-primary" name="mode" value="dry_run">
+          Dry run
         </button>
-        <span class="text-secondary small ms-2">Always dry run first.</span>
+        <button class="btn btn-primary" name="mode" value="apply"
+                onclick="return confirm('Write {{ change.change_count }} change(s) to the {{ connection.name if connection else 'FMC' }} database?\n\nThis does NOT deploy to the FTD devices.')">
+          Push to FMC
+        </button>
+        {% if targets %}
+        <button class="btn btn-danger" name="mode" value="push_and_deploy"
+                onclick="return confirm('Write {{ change.change_count }} change(s) to the FMC AND deploy them to the selected FTD devices?\n\nThis changes live traffic enforcement.')">
+          Push &amp; Deploy to FTD
+        </button>
+        {% endif %}
+      </div>
+
+      <div class="col-12">
+        <div class="text-secondary small">
+          <strong>Dry run</strong> contacts nothing.
+          <strong>Push to FMC</strong> writes objects and rules to the FMC database only — the
+          firewalls keep enforcing the old policy until a deployment happens.
+          <strong>Push &amp; Deploy</strong> also pushes the policy out to the selected FTDs and
+          waits for the FMC deployment task to finish.
+        </div>
       </div>
     </form>
   </div>

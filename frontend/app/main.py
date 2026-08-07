@@ -289,6 +289,7 @@ async def change_detail(request: Request, change_id: str) -> Response:
     change = await api(request, "GET", f"/api/v1/changes/{change_id}")
     connections = await api(request, "GET", "/api/v1/connections")
     change_reports = await api(request, "GET", f"/api/v1/reports?subject_id={change_id}")
+    targets = await api(request, "GET", f"/api/v1/changes/{change_id}/targets")
     connection = next((c for c in connections if c["id"] == change["connection_id"]), None)
     return render(
         request,
@@ -296,6 +297,7 @@ async def change_detail(request: Request, change_id: str) -> Response:
         change=change,
         connection=connection,
         reports=change_reports,
+        targets=targets,
         issues=(change.get("validation") or {}).get("issues", []),
     )
 
@@ -325,8 +327,9 @@ async def deploy_change(
     mode: str = Form("dry_run"),
     engine: str = Form("rest"),
     acknowledge_warnings: str | None = Form(None),
+    devices: list[str] = Form(default=[]),
 ) -> Response:
-    dry_run = mode != "apply"
+    dry_run = mode == "dry_run"
     job = await api(
         request,
         "POST",
@@ -336,6 +339,7 @@ async def deploy_change(
             "engine": engine,
             "confirm": not dry_run,
             "acknowledge_warnings": acknowledge_warnings == "on",
+            "deploy_to_devices": devices if mode == "push_and_deploy" else [],
         },
     )
     return RedirectResponse(f"/jobs/{job['id']}", status_code=status.HTTP_303_SEE_OTHER)

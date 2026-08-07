@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import time
 from typing import Any
 
 from app.plugins.base import (
@@ -1412,6 +1413,85 @@ class SecureFirewallPlugin(SecurityPlugin):
                     progress(int(position / total * 100), f"{position}/{len(operations)} applied")
 
         return DeploymentResult(ok=failed == 0, applied=applied, failed=failed, details=details)
+
+    # -- push to managed devices -------------------------------------------
+    @staticmethod
+    def _deployable(record: dict[str, Any]) -> dict[str, Any]:
+        """FMC versions disagree on the shape of a deployable device; normalise it."""
+        device = record.get("device") or {}
+        return {
+            "id": record.get("deviceId") or device.get("id") or record.get("id") or "",
+            "name": record.get("name") or device.get("name") or "unnamed",
+            "version": str(record.get("version") or ""),
+            "can_deploy": bool(record.get("canBeDeployed", True)),
+        }
+
+    def deployable_devices(self, ctx: ConnectionContext) -> list[dict[str, Any]]:
+        with self._client(ctx) as fmc:
+            return [self._deployable(r) for r in fmc.list_deployable_devices()]
+
+    def push_to_devices(
+        self,
+        ctx: ConnectionContext,
+        device_ids: list[str],
+        progress: ProgressCallback | None = None,
+        poll_seconds: int = 600,
+    ) -> dict[str, Any]:
+        """Ask the FMC to deploy staged configuration to the selected FTDs, and wait."""
+        with self._client(ctx) as fmc:
+            candidates = [self._deployable(r) for r in fmc.list_deployable_devices()]
+            selected = [d for d in candidates if d["id"] in set(device_ids) and d["can_deploy"]]
+
+            if not selected:
+                return {
+                    "ok": True,
+                    "skipped": True,
+                    "message": "The FMC reported nothing pending deployment on the selected devices.",
+                    "devices": [],
+                }
+
+            # The FMC rejects a request whose version is older than its pending change.
+            version = max((d["version"] for d in selected if d["version"]), default="")
+            names = ", ".join(d["name"] for d in selected)
+            if progress:
+                progress(0, f"requesting deployment to {names}")
+
+            response = fmc.request_deployment([d["id"] for d in selected], version)
+            task_id = (
+                (response.get("metadata") or {}).get("task", {}).get("id")
+                or (response.get("task") or {}).get("id")
+                or response.get("id", "")
+            )
+
+            state, message = "Unknown", ""
+            waited = 0
+            while task_id and waited < poll_seconds:
+                time.sleep(10)
+                waited += 10
+                try:
+                    status = fmc.task_status(task_id)
+                except FmcError as exc:
+                    state, message = "Unknown", str(exc)
+                    break
+                state = status.get("status", "Unknown")
+                message = status.get("message", "") or ""
+                if progress:
+                    progress(min(95, int(waited / poll_seconds * 100)), f"deployment {state}")
+                if state in {"Deployed", "Completed", "Success", "Successful"}:
+                    break
+                if state in {"Failed", "Cancelled"}:
+                    break
+
+            ok = state in {"Deployed", "Completed", "Success", "Successful"}
+            return {
+                "ok": ok,
+                "skipped": False,
+                "state": state,
+                "message": message or (f"Deployment {state}"),
+                "task_id": task_id,
+                "devices": [{"id": d["id"], "name": d["name"]} for d in selected],
+                "timed_out": bool(task_id) and waited >= poll_seconds and not ok,
+            }
 
     # -- rollback ----------------------------------------------------------
     def rollback(self, ctx: ConnectionContext, result: DeploymentResult) -> DeploymentResult:

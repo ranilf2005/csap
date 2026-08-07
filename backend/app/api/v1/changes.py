@@ -5,8 +5,14 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, s
 from fastapi.responses import Response
 
 from app.api.deps import CurrentUser, DbSession, record_audit
-from app.models import ChangeRequest, Connection, Job
-from app.schemas import ChangeRequestOut, ChangeRequestSummary, DeployRequest, JobOut
+from app.models import ChangeRequest, Connection, InventoryItem, Job
+from app.schemas import (
+    ChangeRequestOut,
+    ChangeRequestSummary,
+    DeployRequest,
+    DeployTargetOut,
+    JobOut,
+)
 from app.services import changes as change_service
 from app.services.storage import safe_filename, uploads_dir
 from app.services.templates import build_findings_workbook
@@ -154,6 +160,28 @@ def revalidate(change_id: str, request: Request, user: CurrentUser, db: DbSessio
     return change
 
 
+@router.get("/{change_id}/targets", response_model=list[DeployTargetOut])
+def list_targets(change_id: str, _user: CurrentUser, db: DbSession) -> list[DeployTargetOut]:
+    """Managed devices found during discovery, for choosing what to deploy to."""
+    change = _get_or_404(db, change_id)
+    items = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.snapshot_id == change.snapshot_id, InventoryItem.item_type == "device")
+        .order_by(InventoryItem.name)
+        .all()
+    )
+    return [
+        DeployTargetOut(
+            id=item.external_id or "",
+            name=item.name or "unnamed",
+            model=(item.payload or {}).get("model"),
+            health=(item.payload or {}).get("healthStatus"),
+        )
+        for item in items
+        if item.external_id
+    ]
+
+
 @router.post("/{change_id}/deploy", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED)
 def deploy(
     change_id: str, payload: DeployRequest, request: Request, user: CurrentUser, db: DbSession
@@ -181,7 +209,12 @@ def deploy(
         connection_id=change.connection_id,
         job_type="dry_run" if payload.dry_run else "deploy",
         created_by=user.id,
-        result={"change_id": change.id, "dry_run": payload.dry_run, "engine": payload.engine},
+        result={
+            "change_id": change.id,
+            "dry_run": payload.dry_run,
+            "engine": payload.engine,
+            "deploy_to_devices": [] if payload.dry_run else payload.deploy_to_devices,
+        },
     )
     db.add(job)
     db.commit()
@@ -198,7 +231,11 @@ def deploy(
         actor=user.email,
         target_type="change",
         target_id=change.id,
-        detail={"engine": payload.engine, "operations": change.change_count},
+        detail={
+            "engine": payload.engine,
+            "operations": change.change_count,
+            "devices": payload.deploy_to_devices,
+        },
     )
     return job
 

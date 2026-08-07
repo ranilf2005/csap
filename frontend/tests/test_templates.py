@@ -87,6 +87,7 @@ CASES = {
     },
     "change_detail.html": {
         "change": CHANGE, "connection": CONNECTION, "reports": [REPORT],
+        "targets": [{"id": "d1", "name": "FTD-1", "model": "FTDv", "health": "Healthy"}],
         "issues": [{"severity": "warning", "sheet": "Hosts", "row": 3,
                     "field": "name", "message": "still a member of group WEB-TIER",
                     "remediation": "Remove it from the group in the same upload."}],

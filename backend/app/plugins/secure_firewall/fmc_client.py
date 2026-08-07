@@ -218,3 +218,27 @@ class FmcClient:
 
     def delete_access_rule(self, policy_id: str, rule_id: str) -> dict[str, Any]:
         return self.request("DELETE", self.cfg(f"policy/accesspolicies/{policy_id}/accessrules/{rule_id}"))
+
+    # -- deployment to managed devices -------------------------------------
+    def list_deployable_devices(self) -> list[dict[str, Any]]:
+        """Devices with configuration staged on the FMC but not yet pushed to them."""
+        return self.get_paginated(self.cfg("deployment/deployabledevices"))
+
+    def request_deployment(
+        self,
+        device_ids: list[str],
+        version: str,
+        force: bool = False,
+        ignore_warning: bool = True,
+    ) -> dict[str, Any]:
+        body = {
+            "type": "DeploymentRequest",
+            "version": str(version),
+            "forceDeploy": force,
+            "ignoreWarning": ignore_warning,
+            "deviceList": device_ids,
+        }
+        return self.request("POST", self.cfg("deployment/deploymentrequests"), json=body)
+
+    def task_status(self, task_id: str) -> dict[str, Any]:
+        return self.request("GET", self.cfg(f"job/taskstatuses/{task_id}"))

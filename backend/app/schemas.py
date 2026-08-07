@@ -172,6 +172,14 @@ class DeployRequest(BaseModel):
     engine: str = "rest"
     confirm: bool = False
     acknowledge_warnings: bool = False
+    deploy_to_devices: list[str] = Field(default_factory=list)
+
+
+class DeployTargetOut(BaseModel):
+    id: str
+    name: str
+    model: str | None = None
+    health: str | None = None
 
 
 # -- reports ----------------------------------------------------------------

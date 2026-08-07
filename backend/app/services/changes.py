@@ -203,6 +203,7 @@ def run_deployment(db: Session, job_id: str) -> None:
     change_id = params.get("change_id")
     dry_run = bool(params.get("dry_run", True))
     engine = params.get("engine", "rest")
+    device_ids = params.get("deploy_to_devices") or []
 
     def progress(percent: int, message: str) -> None:
         job.progress = max(0, min(percent, 100))
@@ -244,12 +245,25 @@ def run_deployment(db: Session, job_id: str) -> None:
             change.status = "deployed" if result.ok else "failed"
         db.commit()
 
+        # Objects and rules now exist on the FMC; pushing them to the FTDs is a separate step.
+        device_result = None
+        if not dry_run and result.ok and device_ids:
+            progress(96, "deploying to selected devices")
+            device_result = plugin.push_to_devices(
+                to_context(connection), device_ids, progress=progress
+            )
+            change.deployment = {**change.deployment, "device_deployment": device_result}
+            if not device_result.get("ok"):
+                change.status = "failed"
+            db.commit()
+
         html = reports.render(
             "deployment.html",
             title="Dry run report" if dry_run else "Deployment report",
             connection=connection,
             change=change,
             result=change.deployment,
+            preview=(change.plan or {}).get("preview", []),
         )
         report = reports.save_report(
             db,
@@ -269,6 +283,15 @@ def run_deployment(db: Session, job_id: str) -> None:
             if dry_run
             else f"Applied {result.applied}, failed {result.failed}"
         )
+        if device_result is not None:
+            if device_result.get("skipped"):
+                job.message += " (nothing pending on the selected devices)"
+            else:
+                names = ", ".join(d["name"] for d in device_result.get("devices", []))
+                job.message += f" | device deployment {device_result.get('state')}: {names}"
+            if not device_result.get("ok"):
+                job.status = "failed"
+
         job.result = {
             "change_id": change.id,
             "report_id": report.id,
@@ -276,6 +299,7 @@ def run_deployment(db: Session, job_id: str) -> None:
             "engine": engine,
             "applied": result.applied,
             "failed": result.failed,
+            "device_deployment": device_result,
         }
         job.finished_at = datetime.now(UTC)
         db.commit()

@@ -56,12 +56,57 @@
 </section>
 {% endif %}
 
+{% if result.device_deployment %}
+{% set dd = result.device_deployment %}
+<section>
+  <h2>Deployment to managed devices</h2>
+  {% if dd.skipped %}
+  <div class="empty">{{ dd.message }}</div>
+  {% else %}
+  <div class="body">
+    <span class="badge b-{{ 'ok' if dd.ok else 'failed' }}">{{ dd.state }}</span>
+    {{ dd.message }}
+    {% if dd.timed_out %}<br>CSAP stopped waiting; check the FMC deployment history.{% endif %}
+  </div>
+  <table>
+    <thead><tr><th>Device</th><th>Id</th></tr></thead>
+    <tbody>
+      {% for device in dd.devices %}
+      <tr><td><strong>{{ device.name }}</strong></td><td><code>{{ device.id }}</code></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% elif not result.dry_run %}
+<section>
+  <h2>Deployment to managed devices</h2>
+  <div class="empty">
+    Not requested. The configuration is on the FMC but the firewalls are still enforcing the
+    previous policy until it is deployed.
+  </div>
+</section>
+{% endif %}
+
+{% if preview %}
+<section>
+  <h2>Commands {{ 'that would be sent' if result.dry_run else 'that were sent' }}</h2>
+  <div class="body">
+    <pre style="background:#1a2433;color:#e8edf3;padding:14px;border-radius:6px;overflow:auto;font-size:12px">{% for call in preview %}# {{ loop.index }}. {{ call.action }} {{ call.entity }} "{{ call.name }}"
+{{ call.cli }}
+
+{% endfor %}</pre>
+  </div>
+</section>
+{% endif %}
+
 {% if result.dry_run %}
 <section>
   <h2>Next step</h2>
   <div class="body">
-    Nothing was changed on the device. Review the operations above, then re-run the
-    deployment with dry run disabled to apply them.
+    Nothing was changed. Review the operations and commands above, then use
+    <strong>Push to FMC</strong> to write them to the FMC, or
+    <strong>Push &amp; Deploy to FTD</strong> to write them and deploy to the firewalls.
   </div>
 </section>
 {% endif %}
