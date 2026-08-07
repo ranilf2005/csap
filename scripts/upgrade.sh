@@ -13,16 +13,27 @@ warn() { printf '\033[1;33m[csap]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[csap]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ -f .env ]] || die "No .env found. Run ./scripts/install.sh first."
-TARGET_VERSION="${1:-}"
 
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 CURRENT_VERSION="$CSAP_VERSION"
 
+# .env pins CSAP_VERSION from install time and git never rewrites it, so without
+# this the default is whatever is already running - i.e. upgrading to nothing.
+REPO_VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
+TARGET_VERSION="${1:-$REPO_VERSION}"
+
+[[ -n "$TARGET_VERSION" ]] || die "Could not determine a target version. Pass one: ./scripts/upgrade.sh 0.4.0"
+
+if [[ "$TARGET_VERSION" == "$CURRENT_VERSION" ]]; then
+  warn "Already on ${CURRENT_VERSION}."
+  warn "If you expected something newer, run 'git pull' first so VERSION is up to date."
+fi
+
 log "Backing up before upgrading..."
 ./scripts/backup.sh
 
-if [[ -n "$TARGET_VERSION" ]]; then
+if [[ "$TARGET_VERSION" != "$CURRENT_VERSION" ]]; then
   log "Switching CSAP_VERSION ${CURRENT_VERSION} -> ${TARGET_VERSION}"
   python3 - "$TARGET_VERSION" <<'PY'
 import re, sys

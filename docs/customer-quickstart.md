@@ -281,11 +281,19 @@ configuration. Schedule it nightly:
 ### Upgrade
 
 ```bash
+cd ~/csap
+git pull                 # required first: .env pins your current version
 ./scripts/upgrade.sh
 ```
 
 Backs up first, downloads the new version, restarts and health-checks. If the health check
 fails it tells you how to go back.
+
+Confirm what is running:
+
+```bash
+curl -k https://localhost/api/v1/health/live
+```
 
 ### Stop, start, remove
 
@@ -323,6 +331,7 @@ docker compose logs <name>   # e.g. docker compose logs nginx
 | Symptom | Cause and fix |
 |---|---|
 | `Package 'docker-ce' has no installation candidate` | Docker's repository was not added. Re-run all of step 1 in order. |
+| A fix you were told about is not present | Your `.env` pins the old `CSAP_VERSION`. Run `git pull` then `./scripts/upgrade.sh`, and confirm with `curl -k https://localhost/api/v1/health/live` |
 | `permission denied` talking to Docker | Run `newgrp docker`, or log out and back in |
 | Browser cannot connect on 443 | `docker compose ps` — if nginx says `Restarting`, check `docker compose logs nginx` |
 | nginx: `cannot load certificate key ... Permission denied` | `docker run --rm -v "$PWD/nginx/certs:/certs" alpine:3.20 chown -R 101:101 /certs` then `docker compose restart nginx` |

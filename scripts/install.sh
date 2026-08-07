@@ -91,6 +91,14 @@ fi
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 
+# git pull updates the checkout but never .env, so a re-run silently redeploys
+# whatever version was first installed.
+REPO_VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
+if [[ -n "$REPO_VERSION" && "$CSAP_VERSION" != "$REPO_VERSION" ]]; then
+  warn "Your .env pins CSAP_VERSION=${CSAP_VERSION}, but this checkout is ${REPO_VERSION}."
+  warn "This run will deploy ${CSAP_VERSION}. To move to ${REPO_VERSION}: ./scripts/upgrade.sh"
+fi
+
 # --- 3. TLS certificate ----------------------------------------------------
 # The nginx image runs entirely as uid 101, so it must own the key to read it.
 NGINX_UID=101

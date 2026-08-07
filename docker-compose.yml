@@ -31,7 +31,7 @@ services:
     networks: [csap_net]
 
   backend:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-backend:${CSAP_VERSION:-0.3.4}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-backend:${CSAP_VERSION:-0.3.5}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -56,7 +56,7 @@ services:
     networks: [csap_net]
 
   worker:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-backend:${CSAP_VERSION:-0.3.4}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-backend:${CSAP_VERSION:-0.3.5}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -73,7 +73,7 @@ services:
     networks: [csap_net]
 
   frontend:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-frontend:${CSAP_VERSION:-0.3.4}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-frontend:${CSAP_VERSION:-0.3.5}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -84,7 +84,7 @@ services:
     networks: [csap_net]
 
   nginx:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-nginx:${CSAP_VERSION:-0.3.4}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-ranilf2005}/csap-nginx:${CSAP_VERSION:-0.3.5}
     build:
       context: ./nginx
       dockerfile: Dockerfile

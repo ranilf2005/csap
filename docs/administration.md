@@ -50,9 +50,15 @@ artifacts are restored, then everything starts again.
 ## Upgrades
 
 ```bash
-./scripts/upgrade.sh          # latest version in .env
-./scripts/upgrade.sh 0.4.0    # a specific version
+git pull                      # REQUIRED FIRST - see below
+./scripts/upgrade.sh          # moves to the version in the VERSION file
+./scripts/upgrade.sh 0.4.0    # or a specific version
 ```
+
+> **`git pull` first, every time.** Your `.env` pins `CSAP_VERSION` from install time and git
+> never rewrites it, because it holds your secrets. `docker compose pull` on its own therefore
+> re-fetches the version you already have. `upgrade.sh` reads the `VERSION` file from the
+> checkout and rewrites `CSAP_VERSION` in `.env` for you - but only if the checkout is current.
 
 The script backs up first, pulls the new images, recreates the services (schema changes run in the
 backend entrypoint) and health-checks. If the health check fails it tells you how to roll back:
@@ -60,6 +66,13 @@ backend entrypoint) and health-checks. If the health check fails it tells you ho
 ```bash
 ./scripts/upgrade.sh <previous-version>
 ./scripts/restore.sh backups/csap-db-<stamp>.sql.gz
+```
+
+To check what is actually running:
+
+```bash
+curl -k https://localhost/api/v1/health/live   # reports the running version
+docker compose images | grep csap              # the image tags in use
 ```
 
 ## Secrets
