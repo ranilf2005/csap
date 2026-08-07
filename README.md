@@ -40,16 +40,22 @@ Nothing is written to a device until you explicitly choose *Apply* and confirm.
 
 ## Documentation
 
+**Full documentation site: <https://ranilf2005.github.io/csap/>**
+
 | Guide | For |
 |---|---|
 | [**Quick start**](docs/customer-quickstart.md) | **Customers: install and test end to end** |
 | [Installation](docs/installation.md) | Standing it up on Ubuntu |
-| [Testing on Ubuntu](docs/testing-on-ubuntu.md) | End-to-end test plan, with or without an FMC |
-| [Web UI guide](docs/user-guide.md) | Every screen and the daily workflow |
+| [Web portal guide](docs/user-guide.md) | Every screen and the daily workflow |
 | [Workbook reference](docs/workbook-reference.md) | What goes in each Excel column |
-| [Administration](docs/administration.md) | Backup, upgrade, secrets, troubleshooting |
+| [Command reference](docs/commands.md) | Every command, status check and troubleshooting step |
+| [Architecture](docs/architecture.md) | Data model, caching, security |
+| [Project structure](docs/project-structure.md) | What every file does |
 | [API reference](docs/api-reference.md) | Driving CSAP from scripts or CI |
 | [Plugin development](docs/plugin-development.md) | Adding another Cisco product |
+| [SDLC](docs/sdlc.md) | How this is built, tested and released |
+| [Administration](docs/administration.md) | Backup, upgrade, secrets, troubleshooting |
+| [Test plan](docs/testing-on-ubuntu.md) | End-to-end verification |
 
 ---
 

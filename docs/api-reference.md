@@ -1,3 +1,8 @@
+---
+title: API reference
+nav_order: 9
+---
+
 # API reference
 
 Base URL: `https://<host>/api/v1`

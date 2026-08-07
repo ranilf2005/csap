@@ -1,3 +1,8 @@
+---
+title: Quick start
+nav_order: 2
+---
+
 # CSAP quick start
 
 Everything you need to install the Cisco Security Automation Platform on your own Ubuntu

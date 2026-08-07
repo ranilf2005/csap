@@ -1,3 +1,8 @@
+---
+title: Test plan
+nav_order: 13
+---
+
 # Testing on an Ubuntu server
 
 A complete end-to-end test, from a blank Ubuntu box to a verified deployment.

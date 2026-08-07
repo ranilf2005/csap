@@ -1,0 +1,40 @@
+title: Cisco Security Automation Platform
+description: >-
+  Discover, validate and deploy Cisco security configuration from a reviewed
+  Excel workbook. Prototype - use at your own risk.
+
+url: https://ranilf2005.github.io
+baseurl: /csap
+
+remote_theme: just-the-docs/just-the-docs@v0.7.0
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+search_enabled: true
+search:
+  heading_level: 3
+  previews: 2
+
+color_scheme: light
+heading_anchors: true
+
+aux_links:
+  GitHub repository:
+    - https://github.com/ranilf2005/csap
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: Releases
+    url: https://github.com/ranilf2005/csap/releases
+
+footer_content: >-
+  Prototype software, published for evaluation only. No warranty, no support,
+  no liability. Not affiliated with or endorsed by Cisco Systems, Inc.
+  Licensed under Apache-2.0.
+
+back_to_top: true
+back_to_top_text: Back to top
+
+exclude:
+  - README.md

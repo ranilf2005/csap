@@ -1,3 +1,8 @@
+---
+title: Administration
+nav_order: 12
+---
+
 # Administration
 
 ## Day-to-day commands

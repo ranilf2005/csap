@@ -1,4 +1,9 @@
-# Web UI guide
+---
+title: Web portal guide
+nav_order: 4
+---
+
+# Web portal guide
 
 Every screen in CSAP, in the order you will use them.
 

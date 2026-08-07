@@ -1,3 +1,8 @@
+---
+title: Workbook reference
+nav_order: 5
+---
+
 # Workbook reference
 
 CSAP generates the workbook dynamically from what discovery actually found, so your file will

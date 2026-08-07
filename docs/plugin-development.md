@@ -1,3 +1,8 @@
+---
+title: Plugin development
+nav_order: 10
+---
+
 # Plugin development
 
 Adding a Cisco product to CSAP means writing one Python package. The core platform —
