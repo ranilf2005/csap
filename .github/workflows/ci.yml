@@ -88,6 +88,8 @@ jobs:
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
             -keyout nginx/certs/csap.key -out nginx/certs/csap.crt \
             -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost"
+          # nginx runs as uid 101 in the container and must own the key to read it
+          sudo chown -R 101:101 nginx/certs
       - name: Start stack
         run: docker compose up -d --build
       - name: Wait for API

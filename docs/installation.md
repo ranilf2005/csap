@@ -79,9 +79,15 @@ Use this if the GHCR packages are private, or you have local modifications.
 ```bash
 sudo cp fullchain.pem nginx/certs/csap.crt
 sudo cp privkey.pem  nginx/certs/csap.key
-sudo chmod 600 nginx/certs/csap.key
+
+# nginx runs as uid 101 inside the container and must own the key to read it
+docker run --rm -v "$PWD/nginx/certs:/certs" alpine:3.20 chown -R 101:101 /certs
+
 docker compose restart nginx
 ```
+
+If you skip the `chown`, nginx cannot read the key and the container enters a restart loop.
+Check with `docker compose logs nginx`.
 
 ## Firewall
 

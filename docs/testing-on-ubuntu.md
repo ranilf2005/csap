@@ -284,6 +284,7 @@ curl -k https://localhost/api/v1/health/ready
 | `Package 'docker-ce' has no installation candidate` | Docker's repository was not added. Re-run all of step 1 in order, including the two `tee` lines. |
 | `Unable to locate package docker-compose-plugin` | Same cause as above. |
 | `docker compose version` says `command not found` | You have Compose v1 (`docker-compose`). Install `docker-compose-plugin` from Docker's repo. |
+| nginx stuck `Restarting`, `curl` to 443 refused | `docker compose logs nginx`. If it says `cannot load certificate key ... Permission denied`, run `docker run --rm -v "$PWD/nginx/certs:/certs" alpine:3.20 chown -R 101:101 /certs` then `docker compose restart nginx`. |
 | `permission denied` on the Docker socket | `newgrp docker`, or log out and back in |
 | Port 443 already in use | Set `HTTP_PORT`/`HTTPS_PORT` in `.env`, then `docker compose up -d` |
 | Backend restarting | `docker compose logs backend` — usually a missing value in `.env` |

@@ -119,9 +119,15 @@ Replace the self-signed certificate with a CA-signed one:
 ```bash
 cp fullchain.pem nginx/certs/csap.crt
 cp privkey.pem  nginx/certs/csap.key
-chmod 600 nginx/certs/csap.key
+
+# nginx runs as uid 101 inside the container and must own the key to read it
+docker run --rm -v "$PWD/nginx/certs:/certs" alpine:3.20 chown -R 101:101 /certs
+
 docker compose restart nginx
 ```
+
+Skipping the `chown` leaves nginx unable to read the key, and the container restart-loops with
+`cannot load certificate key ... Permission denied` in `docker compose logs nginx`.
 
 nginx terminates TLS (1.2/1.3 only) and sets HSTS, `X-Frame-Options: DENY`,
 `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`.

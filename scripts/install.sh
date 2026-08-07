@@ -73,6 +73,18 @@ fi
 set -a; source .env; set +a
 
 # --- 3. TLS certificate ----------------------------------------------------
+# The nginx image runs entirely as uid 101, so it must own the key to read it.
+NGINX_UID=101
+
+grant_cert_access() {
+  if docker run --rm -v "$ROOT_DIR/nginx/certs:/certs" alpine:3.20 \
+       chown -R "${NGINX_UID}:${NGINX_UID}" /certs >/dev/null 2>&1; then
+    return 0
+  fi
+  warn "Could not chown the certificates to uid ${NGINX_UID}; falling back to world-readable."
+  chmod 644 nginx/certs/csap.key nginx/certs/csap.crt
+}
+
 CERT_CN="${HOSTNAME_OVERRIDE:-$(hostname -f 2>/dev/null || hostname)}"
 if [[ ! -f nginx/certs/csap.crt ]]; then
   log "Generating a self-signed TLS certificate for '$CERT_CN' (replace with a CA-signed cert for production)..."
@@ -83,6 +95,7 @@ if [[ ! -f nginx/certs/csap.crt ]]; then
     -addext "subjectAltName=DNS:${CERT_CN},DNS:localhost,IP:127.0.0.1" 2>/dev/null
   chmod 600 nginx/certs/csap.key
 fi
+grant_cert_access
 
 # --- 4. images -------------------------------------------------------------
 if [[ "$BUILD_LOCAL" == true ]]; then
