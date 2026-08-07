@@ -18,6 +18,38 @@ die()  { printf '\033[1;31m[csap]\033[0m %s\n' "$*" >&2; exit 1; }
 set -a; source .env; set +a
 CURRENT_VERSION="$CSAP_VERSION"
 
+# Every install uses the Compose project name 'csap', so two checkouts on one
+# host share containers and volumes while each keeps its own .env. Recreating
+# services with the wrong .env takes a working stack down.
+preflight_db_credentials() {
+  docker volume inspect csap_postgres_data >/dev/null 2>&1 || return 0
+  docker compose ps --services --status running 2>/dev/null | grep -qx postgres || return 0
+
+  # -h forces TCP so the password is actually checked; the unix socket trusts.
+  if docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \
+       psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT 1' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  die "$(cat <<'MSG'
+The credentials in this directory's .env do not match the running database.
+
+Nothing has been changed. Recreating the services now would take the running
+stack down.
+
+This happens when more than one checkout manages the platform on this host:
+they share the Compose project 'csap', and therefore the same containers and
+volumes, but each directory has its own .env.
+
+Run this from the directory whose .env created the database. To find it:
+    grep -l "$(docker compose exec -T postgres printenv POSTGRES_PASSWORD 2>/dev/null)" ~/*/.env
+
+Then delete the other checkout so this cannot recur.
+MSG
+)"
+}
+preflight_db_credentials
+
 # .env pins CSAP_VERSION from install time and git never rewrites it, so without
 # this the default is whatever is already running - i.e. upgrading to nothing.
 REPO_VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
