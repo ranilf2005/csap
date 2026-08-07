@@ -8,6 +8,14 @@ from app.core.config import settings
 
 _MAX_BCRYPT_BYTES = 72
 
+# Hashing a throwaway value keeps the unknown-account path as slow as the known
+# one, so response time does not reveal which addresses exist.
+_DUMMY_HASH = bcrypt.hashpw(b"csap-timing-equaliser", bcrypt.gensalt())
+
+
+def waste_a_hash() -> None:
+    bcrypt.checkpw(b"csap-timing-equaliser", _DUMMY_HASH)
+
 
 def hash_password(plain: str) -> str:
     # bcrypt silently truncates beyond 72 bytes; reject instead of hiding it.

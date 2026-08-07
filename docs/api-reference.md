@@ -8,6 +8,9 @@ nav_order: 9
 Base URL: `https://<host>/api/v1`
 Interactive docs: `https://<host>/api/docs` · OpenAPI schema: `https://<host>/api/openapi.json`
 
+Both are **disabled by default** so an unauthenticated visitor cannot enumerate the API.
+To turn them on, set `ENABLE_API_DOCS=true` in `.env` and run `docker compose up -d backend`.
+
 ## Authentication
 
 All endpoints except `/health/*` require a bearer token.

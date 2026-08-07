@@ -169,7 +169,7 @@ generation, reporting and audit trail all work without further changes.
 | `POST` | `/api/v1/drift` | Compare two snapshots |
 | `GET` | `/api/v1/audit` | Audit trail |
 
-Full reference: [docs/api-reference.md](docs/api-reference.md). Interactive docs: `https://<host>/api/docs`.
+Full reference: [docs/api-reference.md](docs/api-reference.md). Interactive docs are disabled by default; set `ENABLE_API_DOCS=true` in `.env` to expose them at `https://<host>/api/docs`.
 
 ---
 

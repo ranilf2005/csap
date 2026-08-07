@@ -90,7 +90,7 @@ def build_workbook(
                 cell.comment = Comment(note, "CSAP", height=170, width=320)
 
         for row in (existing.get(sheet_name) or [])[:MAX_ROWS_PER_SHEET]:
-            ws.append([_cell(row.get(header)) for header in headers])
+            _write_row(ws, [_cell(row.get(header)) for header in headers])
 
         _add_dropdowns(ws, headers)
         ws.freeze_panes = "A2"
@@ -166,6 +166,21 @@ def _add_dropdowns(ws: Any, headers: list[str]) -> None:
         validation.add(f"{column}2:{column}{last_row}")
 
 
+# openpyxl turns any string starting with '=' into a live formula, and Excel
+# treats these leads as formulae on paste or CSV import. Device data is not
+# trusted input, so such cells are written as explicit text instead.
+FORMULA_LEADS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _write_row(ws: Any, values: list[str]) -> None:
+    ws.append(values)
+    row = ws.max_row
+    for column, value in enumerate(values, start=1):
+        if value and value[0] in FORMULA_LEADS:
+            cell = ws.cell(row=row, column=column)
+            cell.data_type = "s"
+
+
 def _cell(value: Any) -> str:
     if value is None:
         return ""
@@ -231,15 +246,16 @@ def build_findings_workbook(
     )
     for issue in ordered:
         severity = str(issue.get("severity") or "info")
-        ws.append(
+        _write_row(
+            ws,
             [
                 severity,
-                issue.get("sheet") or "-",
-                issue.get("row") or "",
-                issue.get("field") or "",
-                issue.get("message") or "",
-                issue.get("remediation") or "",
-            ]
+                str(issue.get("sheet") or "-"),
+                str(issue.get("row") or ""),
+                str(issue.get("field") or ""),
+                str(issue.get("message") or ""),
+                str(issue.get("remediation") or ""),
+            ],
         )
         cell = ws.cell(row=ws.max_row, column=1)
         cell.fill = SEVERITY_FILL.get(severity, SEVERITY_FILL["info"])

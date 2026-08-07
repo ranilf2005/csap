@@ -8,6 +8,7 @@
         <h1 class="h4 mb-1">Cisco Security Automation Platform</h1>
         <p class="text-secondary small mb-4">Sign in to continue</p>
 
+        {% if success %}<div class="alert alert-success py-2">{{ success }}</div>{% endif %}
         {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
 
         <form method="post" action="/login">

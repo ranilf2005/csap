@@ -48,6 +48,23 @@ jobs:
         working-directory: backend
         run: pytest -q --cov=app --cov-report=term-missing
 
+  security:
+    name: Dependency & code scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install scanners
+        run: pip install pip-audit bandit
+      - name: Known vulnerabilities in backend dependencies
+        run: pip-audit -r backend/requirements.txt --strict
+      - name: Known vulnerabilities in frontend dependencies
+        run: pip-audit -r frontend/requirements.txt --strict
+      - name: Static security analysis
+        run: bandit -q -r backend/app frontend/app -ll
+
   frontend:
     name: Frontend template render tests
     runs-on: ubuntu-latest
@@ -85,6 +102,14 @@ jobs:
           tags: csap-${{ matrix.component }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Scan ${{ matrix.component }} image for known CVEs
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: csap-${{ matrix.component }}:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
 
   stack:
     name: End-to-end stack smoke test

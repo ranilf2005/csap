@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
@@ -13,8 +14,12 @@ bearer_scheme = HTTPBearer(auto_error=True)
 
 DbSession = Annotated[Session, Depends(get_db)]
 
+# Reachable while the installation password is still in place.
+_PASSWORD_CHANGE_EXEMPT = ("/api/v1/auth/change-password", "/api/v1/auth/me")
+
 
 def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     db: DbSession,
 ) -> User:
@@ -31,6 +36,23 @@ def get_current_user(
     user = db.get(User, payload.get("sub", ""))
     if user is None or not user.is_active:
         raise unauthorized
+
+    # A password change ends sessions that were already open.
+    issued_at = payload.get("iat")
+    changed_at = user.password_changed_at
+    if issued_at and changed_at:
+        if changed_at.tzinfo is None:
+            changed_at = changed_at.replace(tzinfo=UTC)
+        if datetime.fromtimestamp(issued_at, tz=UTC) < changed_at:
+            raise unauthorized
+
+    # The installation password must be replaced before anything else is reachable.
+    if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_EXEMPT:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Change the installation password before using the platform",
+        )
+
     return user
 
 

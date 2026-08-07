@@ -21,12 +21,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+# The interactive docs describe every endpoint and parameter to anyone who can
+# reach the port, so they are opt-in outside development.
+_docs_enabled = settings.enable_api_docs
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.csap_version,
     description="Plugin-based automation for the Cisco security portfolio.",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if _docs_enabled else None,
+    openapi_url="/api/openapi.json" if _docs_enabled else None,
+    redoc_url=None,
     lifespan=lifespan,
 )
 

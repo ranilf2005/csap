@@ -11,9 +11,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     app_name: str = "Cisco Security Automation Platform"
-    csap_version: str = "0.8.0"
+    csap_version: str = "0.9.0"
     environment: Literal["development", "staging", "production"] = "production"
     log_level: str = "INFO"
+    # Interactive API docs enumerate every endpoint; opt in when you need them.
+    enable_api_docs: bool = False
 
     database_url: str
     redis_url: str

@@ -11,6 +11,7 @@ services:
     environment:
       ENVIRONMENT: development
       LOG_LEVEL: DEBUG
+      ENABLE_API_DOCS: "true"
     volumes:
       - ./backend/app:/app/app
     ports:

@@ -76,10 +76,27 @@ async def _auth_redirect(request: Request, exc: HTTPException) -> Response:
     )
 
 
+# The installation password grants full control of every managed firewall, so
+# nothing else is reachable until it has been replaced. The API enforces this
+# too; this only keeps the UI from showing dead ends.
+_PASSWORD_CHANGE_PATH = "/account/password"
+_ALWAYS_ALLOWED = (_PASSWORD_CHANGE_PATH, "/login", "/logout", "/healthz", "/static")
+
+
+@app.middleware("http")
+async def _force_password_change(request: Request, call_next: Any) -> Response:
+    if request.session.get("must_change_password") and not request.url.path.startswith(
+        _ALWAYS_ALLOWED
+    ):
+        return RedirectResponse(_PASSWORD_CHANGE_PATH, status_code=status.HTTP_303_SEE_OTHER)
+    return await call_next(request)
+
+
 # --- auth ------------------------------------------------------------------
 @app.get("/login", response_class=HTMLResponse)
-async def login_form(request: Request) -> HTMLResponse:
-    return render(request, "login.html")
+async def login_form(request: Request, changed: int = 0) -> HTMLResponse:
+    success = "Password updated. Please sign in again." if changed else None
+    return render(request, "login.html", success=success)
 
 
 @app.post("/login")
@@ -93,6 +110,8 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
     request.session["token"] = data["access_token"]
     request.session["user"] = email
     request.session["must_change_password"] = data.get("must_change_password", False)
+    if request.session["must_change_password"]:
+        return RedirectResponse(_PASSWORD_CHANGE_PATH, status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/logout")
@@ -482,8 +501,10 @@ async def change_password(
     if resp.status_code >= 400:
         return render(request, "change_password.html", error="Your current password is incorrect")
 
-    request.session["must_change_password"] = False
-    return render(request, "change_password.html", success="Password updated.")
+    # Changing the password revokes every token issued before it, including the
+    # one in this session, so the user signs in again with the new password.
+    request.session.clear()
+    return RedirectResponse("/login?changed=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/healthz")

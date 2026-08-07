@@ -42,7 +42,23 @@ def wait_for_db(attempts: int = 30, delay: float = 2.0) -> None:
     )
 
 
+# create_all adds missing tables but never missing columns, so upgrades need these.
+# Each statement must be safe to run repeatedly. Replace with Alembic before 1.0.
+COLUMN_ADDITIONS = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at "
+    "TIMESTAMPTZ NOT NULL DEFAULT now()",
+)
+
+
+def apply_column_additions() -> None:
+    with engine.begin() as conn:
+        for statement in COLUMN_ADDITIONS:
+            conn.execute(text(statement))
+    logger.info("schema is up to date")
+
+
 def seed_admin() -> None:
+
     db = SessionLocal()
     try:
         email = settings.csap_admin_email.lower()
@@ -68,6 +84,7 @@ def main() -> None:
     configure_logging()
     wait_for_db()
     Base.metadata.create_all(engine)
+    apply_column_additions()
     seed_admin()
     logger.info("bootstrap complete (CSAP %s)", settings.csap_version)
 

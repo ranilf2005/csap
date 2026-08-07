@@ -11,7 +11,7 @@ from app.schemas import (
     ConnectionTestResult,
     ConnectionUpdate,
 )
-from app.services.connections import to_context
+from app.services.connections import UnsafeTargetError, assert_target_allowed, to_context
 
 router = APIRouter(prefix="/connections", tags=["connections"])
 
@@ -35,6 +35,11 @@ def create_connection(
     try:
         registry.get(payload.product)
     except KeyError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+    try:
+        assert_target_allowed(payload.host)
+    except UnsafeTargetError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
 
     conn = Connection(
@@ -66,6 +71,11 @@ def update_connection(
 ) -> Connection:
     conn = _get_or_404(db, connection_id)
     data = payload.model_dump(exclude_unset=True)
+    if data.get("host"):
+        try:
+            assert_target_allowed(data["host"])
+        except UnsafeTargetError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
     if "password" in data:
         conn.encrypted_password = encrypt(data.pop("password"))
     for key, value in data.items():

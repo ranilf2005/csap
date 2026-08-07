@@ -30,4 +30,4 @@ USER csapui
 
 EXPOSE 8080
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=*"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips=\"${TRUSTED_PROXY_IPS:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}\""]
