@@ -58,6 +58,7 @@ PORT_COLUMNS = ("source_ports", "destination_ports")
 VALID_ACTIONS = {"create", "update", "delete"}
 GROUP_MEMBER_ENTITIES = ("host", "network", "range", "network_group")
 PORT_ENTITIES = ("port", "port_group")
+URL_ENTITIES = ("url", "url_group")
 
 # Sheets the template offers for reference but that cannot be deployed yet.
 UNSUPPORTED_SHEETS = {"NatRules": "a future release"}
@@ -88,6 +89,94 @@ def _is_literal(value: str) -> bool:
     return True
 
 
+# sheet -> column -> (required, what it is, example). Drives the header notes,
+# the required/optional colouring and the Field Guide sheet.
+_ACTION = ("required", "create, update or delete. Leave blank to ignore the row.", "create")
+_NAME = ("required", "Object name. Must be unique within the sheet.", "APP01")
+_DESC = ("optional", "Free text description.", "Application server")
+
+FIELD_GUIDE: dict[str, dict[str, tuple[str, str, str]]] = {
+    "Hosts": {
+        "action": _ACTION,
+        "name": _NAME,
+        "value": ("required", "One IP address. No prefix. Use Networks for subnets.", "10.1.1.30"),
+        "description": _DESC,
+    },
+    "Networks": {
+        "action": _ACTION,
+        "name": _NAME,
+        "value": ("required", "Subnet in CIDR form. The prefix length is required.", "10.2.0.0/24"),
+        "description": _DESC,
+    },
+    "Ranges": {
+        "action": _ACTION,
+        "name": _NAME,
+        "value": ("required", "Start and end address separated by a hyphen.", "10.1.1.10-10.1.1.50"),
+        "description": _DESC,
+    },
+    "Ports": {
+        "action": _ACTION,
+        "name": _NAME,
+        "protocol": ("required", "TCP or UDP.", "TCP"),
+        "port": ("required", "1-65535, or a range such as 8080-8090.", "8080"),
+        "description": _DESC,
+    },
+    "NetworkGroups": {
+        "action": _ACTION,
+        "name": _NAME,
+        "members": (
+            "required",
+            "Object names separated by commas. On update, list EVERY member you want "
+            "the group to end up with - omitted members are removed.",
+            "WEB01, WEB02, DMZ-NET",
+        ),
+        "description": _DESC,
+    },
+    "AccessRules": {
+        "action": _ACTION,
+        "policy": ("required", "Name of an existing access control policy on the FMC.", "Corp-ACP"),
+        "rule_name": ("required", "Rule name. Must be unique within the policy.", "allow-web"),
+        "rule_action": (
+            "required",
+            "One of: " + ", ".join(sorted(ACCESS_RULE_ACTIONS)),
+            "ALLOW",
+        ),
+        "enabled": ("optional", "true or false. Defaults to true.", "true"),
+        "source_networks": (
+            "optional",
+            "Object names or literal addresses, comma separated. Blank means any.",
+            "DMZ, 10.1.1.0/24",
+        ),
+        "destination_networks": (
+            "optional",
+            "Object names or literal addresses, comma separated. Blank means any.",
+            "WEB01",
+        ),
+        "source_ports": ("optional", "Port object names, comma separated. Blank means any.", ""),
+        "destination_ports": (
+            "optional",
+            "Port object names, comma separated. Blank means any.",
+            "HTTPS",
+        ),
+        "applications": (
+            "not supported",
+            "Shown for reference. CSAP cannot set applications yet; this column is ignored.",
+            "",
+        ),
+        "urls": ("optional", "URL object names, or literal URLs.", "BLOCKED-SITES"),
+        "log_begin": ("optional", "true or false. Log at the start of the connection.", "false"),
+        "log_end": ("optional", "true or false. Log at the end of the connection.", "true"),
+        "send_events_to_fmc": (
+            "conditional",
+            "Required to be true when log_begin or log_end is true - the FMC rejects a rule "
+            "that logs with no destination. Defaults to true when logging is on.",
+            "true",
+        ),
+        "comment": ("optional", "Comment added to the rule history.", "Change CHG0012345"),
+    },
+}
+
+
 class SecureFirewallPlugin(SecurityPlugin):
     manifest = PluginManifest(
         key="secure_firewall",
@@ -99,6 +188,9 @@ class SecureFirewallPlugin(SecurityPlugin):
     )
 
     reference_sheets = frozenset(UNSUPPORTED_SHEETS)
+
+    def field_guide(self) -> dict[str, dict[str, tuple[str, str, str]]]:
+        return FIELD_GUIDE
 
     # -- connect -----------------------------------------------------------
     def _client(self, ctx: ConnectionContext) -> FmcClient:
@@ -238,6 +330,7 @@ class SecureFirewallPlugin(SecurityPlugin):
                 "urls",
                 "log_begin",
                 "log_end",
+                "send_events_to_fmc",
                 "comment",
             ],
             "NatRules": [
@@ -611,6 +704,27 @@ class SecureFirewallPlugin(SecurityPlugin):
                     )
                 )
 
+            # The FMC refuses a rule that logs with nowhere to send the events.
+            logging_on = self._as_bool(row.get("log_begin")) or self._as_bool(row.get("log_end"))
+            if logging_on and not self._as_bool(row.get("send_events_to_fmc"), default=True):
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "send_events_to_fmc",
+                        "logging is enabled but no destination is set, which the FMC rejects",
+                        "Set send_events_to_fmc to true, or set log_begin and log_end to false.",
+                    )
+                )
+
+            if _split(row.get("applications")):
+                issues.append(
+                    ValidationIssue(
+                        "warning", sheet, index, "applications",
+                        "applications cannot be set by CSAP yet, so this column is ignored",
+                        "Leave it as exported. Set applications on this rule in FMC directly "
+                        "if you need them.",
+                    )
+                )
+
             issues.extend(self._validate_rule_members(sheet, index, row, existing, pending))
 
         return issues
@@ -976,14 +1090,23 @@ class SecureFirewallPlugin(SecurityPlugin):
     def _build_rule_payload(
         self, row: dict[str, Any], existing: dict[tuple[str, str], dict[str, Any]]
     ) -> dict[str, Any]:
+        log_begin = self._as_bool(row.get("log_begin"))
+        log_end = self._as_bool(row.get("log_end"))
+
         payload: dict[str, Any] = {
             "name": str(row.get("rule_name", "")).strip(),
             "type": "AccessRule",
             "action": str(row.get("rule_action", "ALLOW")).strip().upper() or "ALLOW",
             "enabled": self._as_bool(row.get("enabled"), default=True),
-            "logBegin": self._as_bool(row.get("log_begin")),
-            "logEnd": self._as_bool(row.get("log_end")),
+            "logBegin": log_begin,
+            "logEnd": log_end,
         }
+
+        # FMC rejects a rule that logs with nowhere to send the events.
+        if log_begin or log_end:
+            payload["sendEventsToFMC"] = self._as_bool(
+                row.get("send_events_to_fmc"), default=True
+            )
 
         for column, key in zip(NETWORK_COLUMNS, ("sourceNetworks", "destinationNetworks"), strict=True):
             container = self._network_container(_split(row.get(column)), existing)
@@ -995,10 +1118,45 @@ class SecureFirewallPlugin(SecurityPlugin):
             if container:
                 payload[key] = container
 
+        urls = self._url_container(_split(row.get("urls")), existing)
+        if urls:
+            payload["urls"] = urls
+
         comment = str(row.get("comment", "") or "").strip()
         if comment:
             payload["newComments"] = [comment]
         return payload
+
+    @staticmethod
+    def _url_container(
+        names: list[str], existing: dict[tuple[str, str], dict[str, Any]]
+    ) -> dict[str, Any]:
+        objects, literals = [], []
+        for member in names:
+            resolved = next(
+                (
+                    existing[(entity, member.lower())]
+                    for entity in URL_ENTITIES
+                    if (entity, member.lower()) in existing
+                ),
+                None,
+            )
+            if resolved:
+                objects.append(
+                    {
+                        "id": resolved.get("external_id"),
+                        "type": resolved["payload"].get("type", "Url"),
+                        "name": resolved.get("name"),
+                    }
+                )
+            else:
+                literals.append({"type": "Url", "url": member})
+        container: dict[str, Any] = {}
+        if objects:
+            container["objects"] = objects
+        if literals:
+            container["literals"] = literals
+        return container
 
     @staticmethod
     def _as_bool(value: Any, default: bool = False) -> bool:

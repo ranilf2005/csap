@@ -7,14 +7,24 @@ from io import BytesIO
 from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3B57")
 REFERENCE_FILL = PatternFill("solid", fgColor="6B7A8C")
+REQUIRED_FILL = PatternFill("solid", fgColor="9C2B2B")
+CONDITIONAL_FILL = PatternFill("solid", fgColor="8A5B00")
+IGNORED_FILL = PatternFill("solid", fgColor="9AA5B1")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 MAX_ROWS_PER_SHEET = 10_000
+
+REQUIREMENT_FILLS = {
+    "required": REQUIRED_FILL,
+    "conditional": CONDITIONAL_FILL,
+    "not supported": IGNORED_FILL,
+}
 
 # Rows beyond the exported data that still offer the dropdowns, so new entries are guided.
 SPARE_ROWS = 500
@@ -28,6 +38,8 @@ DROPDOWNS = {
     "enabled": '"true,false"',
     "log_begin": '"true,false"',
     "log_end": '"true,false"',
+    "send_events_to_fmc": '"true,false"',
+    "rule_action": '"ALLOW,TRUST,BLOCK,MONITOR,BLOCK_RESET,BLOCK_INTERACTIVE,BLOCK_RESET_INTERACTIVE"',
 }
 
 
@@ -39,27 +51,43 @@ def build_workbook(
     reference_sheets: set[str] | None = None,
     snapshot_id: str | None = None,
     snapshot_label: str | None = None,
+    guide: dict[str, dict[str, tuple[str, str, str]]] | None = None,
 ) -> bytes:
     existing = existing or {}
     reference_sheets = reference_sheets or set()
+    guide = guide or {}
 
     wb = Workbook()
     wb.remove(wb.active)
     _write_readme(
         wb, spec, existing, product, product_version, reference_sheets, snapshot_id, snapshot_label
     )
+    if guide:
+        _write_field_guide(wb, spec, guide, reference_sheets)
 
     for sheet_name, headers in spec.items():
         ws = wb.create_sheet(sheet_name[:31])
         ws.append(headers)
 
         is_reference = sheet_name in reference_sheets
+        sheet_guide = guide.get(sheet_name, {})
         for col, header in enumerate(headers, start=1):
             cell = ws.cell(row=1, column=col)
-            cell.fill = REFERENCE_FILL if is_reference else HEADER_FILL
+            requirement, description, example = sheet_guide.get(header, ("", "", ""))
+
+            if is_reference:
+                cell.fill = REFERENCE_FILL
+            else:
+                cell.fill = REQUIREMENT_FILLS.get(requirement, HEADER_FILL)
             cell.font = HEADER_FONT
             cell.alignment = Alignment(horizontal="center")
             ws.column_dimensions[get_column_letter(col)].width = max(14, len(header) + 4)
+
+            if description:
+                note = f"{requirement.upper()}\n\n{description}"
+                if example:
+                    note += f"\n\nExample: {example}"
+                cell.comment = Comment(note, "CSAP", height=170, width=320)
 
         for row in (existing.get(sheet_name) or [])[:MAX_ROWS_PER_SHEET]:
             ws.append([_cell(row.get(header)) for header in headers])
@@ -72,6 +100,46 @@ def build_workbook(
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _write_field_guide(
+    wb: Workbook,
+    spec: dict[str, list[str]],
+    guide: dict[str, dict[str, tuple[str, str, str]]],
+    reference_sheets: set[str],
+) -> None:
+    """Every column on every sheet, so nobody has to guess what to fill in."""
+    ws = wb.create_sheet("Field Guide")
+    ws.append(["What to put in every column"])
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.append([])
+    ws.append(["Header colour in each sheet: red = required, amber = conditional,"])
+    ws.append(["grey = ignored by CSAP, navy = optional. Hover a header for the same note."])
+    ws.append([])
+
+    ws.append(["Sheet", "Column", "Required?", "What it is", "Example"])
+    header_row = ws.max_row
+    for col in range(1, 6):
+        cell = ws.cell(row=header_row, column=col)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+
+    for sheet_name, headers in spec.items():
+        sheet_guide = guide.get(sheet_name, {})
+        if not sheet_guide:
+            continue
+        for header in headers:
+            requirement, description, example = sheet_guide.get(header, ("optional", "", ""))
+            label = "reference only" if sheet_name in reference_sheets else requirement
+            ws.append([sheet_name, header, label, description, example])
+            if label in REQUIREMENT_FILLS:
+                ws.cell(row=ws.max_row, column=3).font = Font(bold=True)
+
+    for column, width in zip("ABCDE", (18, 24, 16, 78, 24), strict=True):
+        ws.column_dimensions[column].width = width
+    for row in ws.iter_rows(min_row=header_row + 1):
+        row[3].alignment = Alignment(wrap_text=True, vertical="top")
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
 
 
 def _add_dropdowns(ws: Any, headers: list[str]) -> None:
@@ -224,11 +292,21 @@ def _write_readme(
         "1. Every object already on the device is listed, one row per object.",
         "2. Find the row you want to change, or add a new row at the bottom of the sheet.",
         "3. Set the 'action' cell on that row. Click the cell and pick from the dropdown.",
-        "4. Save the file and upload it in CSAP under Changes.",
-        "5. Fix anything validation reports, then run a dry run before applying.",
+        "4. Fill in every column whose header is RED - those are mandatory.",
+        "5. Save the file and upload it in CSAP under Changes.",
+        "6. Fix anything validation reports, then run a dry run before applying.",
         "",
         "A row is ONLY acted on if its 'action' cell is set. Blank means ignore.",
         "That is why you can leave hundreds of rows untouched and change just one.",
+        "",
+        "HEADER COLOURS",
+        "    RED    mandatory - the row is rejected without it",
+        "    AMBER  conditional - required only in certain combinations",
+        "    NAVY   optional",
+        "    GREY   shown for reference, ignored by CSAP",
+        "",
+        "Hover over any column header for what it means and an example.",
+        "The 'Field Guide' tab lists every column in one table.",
     ):
         ws.append([line])
 

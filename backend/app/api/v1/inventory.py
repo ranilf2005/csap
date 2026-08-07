@@ -67,6 +67,7 @@ def _workbook_response(
         reference_sheets=set(plugin.reference_sheets),
         snapshot_id=snapshot.id,
         snapshot_label=snapshot.label,
+        guide=plugin.field_guide(),
     )
 
     connection = db.get(Connection, snapshot.connection_id)

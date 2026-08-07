@@ -126,6 +126,10 @@ class SecurityPlugin(ABC):
         """
         return {}
 
+    def field_guide(self) -> dict[str, dict[str, tuple[str, str, str]]]:
+        """sheet -> column -> (requirement, description, example), for in-workbook guidance."""
+        return {}
+
     @abstractmethod
     def validate(self, rows: dict[str, list[dict[str, Any]]], discovery: DiscoveryResult) -> ValidationResult:
         """Check an uploaded workbook against schema rules and live inventory."""
