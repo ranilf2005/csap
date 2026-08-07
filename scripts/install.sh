@@ -138,7 +138,11 @@ fi
 
 # --- 5. start --------------------------------------------------------------
 log "Starting the platform..."
-docker compose up -d
+if ! docker compose up -d; then
+  warn "Services did not come up. Last 25 lines from the backend:"
+  docker compose logs backend --tail 25 2>&1 | sed 's/^/    /' || true
+  die "Startup failed. See the output above; 'docker compose logs' has the full detail."
+fi
 
 log "Waiting for services to become healthy..."
 for _ in $(seq 1 60); do

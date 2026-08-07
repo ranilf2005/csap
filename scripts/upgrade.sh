@@ -50,14 +50,24 @@ fi
 log "Pulling images for ${CSAP_VERSION}..."
 docker compose pull
 
+show_backend_logs() {
+  warn "Last 25 lines from the backend:"
+  docker compose logs backend --tail 25 2>&1 | sed 's/^/    /' || true
+}
+
 log "Recreating services (schema migrations run in the backend entrypoint)..."
-docker compose up -d --remove-orphans
+if ! docker compose up -d --remove-orphans; then
+  show_backend_logs
+  warn "Roll back with: ./scripts/upgrade.sh ${CURRENT_VERSION}"
+  die "Upgrade aborted. Your data is untouched and a backup was taken before this ran."
+fi
 
 log "Waiting for health..."
 sleep 20
 if curl -ksSf "https://localhost:${HTTPS_PORT:-443}/api/v1/health/live" >/dev/null 2>&1; then
   log "Upgrade to ${CSAP_VERSION} complete."
 else
+  show_backend_logs
   warn "Health check failed. Roll back with: ./scripts/upgrade.sh ${CURRENT_VERSION}"
   warn "Then restore data with: ./scripts/restore.sh <backup-file>"
   exit 1
