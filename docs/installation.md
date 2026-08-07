@@ -15,20 +15,37 @@ Inbound 443 from your administrators.
 
 ## Install Docker
 
+> **Run the whole block in order.** `docker-ce` and `docker-compose-plugin` live in Docker's own
+> APT repository, not Ubuntu's. Jumping straight to the install line fails with
+> `Package 'docker-ce' has no installation candidate`.
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git make openssl python3
+sudo apt-get install -y ca-certificates curl gnupg git make openssl python3
+
+# Docker's GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
 sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+
+# Docker's repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Only now do the packages exist
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 sudo usermod -aG docker $USER
 newgrp docker          # or log out and back in
-docker compose version # verify
+```
+
+Verify before continuing:
+
+```bash
+docker --version
+docker compose version   # must be v2.x -- CSAP does not work with docker-compose v1
+docker run --rm hello-world
 ```
 
 ## Install CSAP

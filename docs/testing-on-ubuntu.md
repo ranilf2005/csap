@@ -18,20 +18,45 @@ multipass shell csap
 
 ## 1. Install prerequisites
 
+> **Run this whole block in order.** `docker-ce` and `docker-compose-plugin` are not in Ubuntu's
+> default repositories — they come from Docker's own repo, which the middle lines add. Skipping
+> ahead to the install line gives you
+> `Package 'docker-ce' has no installation candidate` and `Unable to locate package docker-compose-plugin`.
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git make openssl python3
+sudo apt-get install -y ca-certificates curl gnupg git make openssl python3
+
+# Docker's GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
 sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+
+# Docker's repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Only now do the packages exist
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
 sudo usermod -aG docker $USER && newgrp docker
 ```
 
-**Check:** `docker compose version` prints v2.x.
+**Check:**
+
+```bash
+docker --version           # 27.x or newer
+docker compose version     # must report v2.x -- CSAP needs Compose v2
+docker run --rm hello-world
+```
+
+CSAP needs **Compose v2** (`docker compose`, a space). The old `docker-compose` v1 script in
+Ubuntu's universe repo will not work.
+
+If the repository line produces a codename Docker does not publish (anything other than a real
+Ubuntu codename such as `jammy` or `noble`), you are on a derivative distribution — substitute the
+upstream Ubuntu codename by hand. Check with `. /etc/os-release && echo "$ID $VERSION_ID $VERSION_CODENAME"`.
 
 ---
 
@@ -256,6 +281,9 @@ curl -k https://localhost/api/v1/health/ready
 
 | Symptom | Check |
 |---|---|
+| `Package 'docker-ce' has no installation candidate` | Docker's repository was not added. Re-run all of step 1 in order, including the two `tee` lines. |
+| `Unable to locate package docker-compose-plugin` | Same cause as above. |
+| `docker compose version` says `command not found` | You have Compose v1 (`docker-compose`). Install `docker-compose-plugin` from Docker's repo. |
 | `permission denied` on the Docker socket | `newgrp docker`, or log out and back in |
 | Port 443 already in use | Set `HTTP_PORT`/`HTTPS_PORT` in `.env`, then `docker compose up -d` |
 | Backend restarting | `docker compose logs backend` — usually a missing value in `.env` |
