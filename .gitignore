@@ -1,0 +1,29 @@
+.env
+.env.local
+*.env.bak
+
+nginx/certs/*
+!nginx/certs/.gitkeep
+
+data/
+backups/
+*.sqlite3
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Personal design notes - remove this line if you want them in the repo
+Cisco Security Automation Platform my idea.txt

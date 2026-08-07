@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Audit | CSAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="fw-semibold">Audit log</span>
+    <form class="d-flex gap-2" method="get" action="/audit">
+      <input class="form-control form-control-sm" name="actor" value="{{ actor }}" placeholder="Filter by user">
+      <button class="btn btn-sm btn-primary">Filter</button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>When</th><th>User</th><th>Action</th><th>Target</th><th>Outcome</th><th>Source IP</th></tr></thead>
+      <tbody>
+      {% for e in events %}
+        <tr>
+          <td class="small text-nowrap">{{ e.created_at[:19].replace('T', ' ') }}</td>
+          <td class="small">{{ e.actor or '-' }}</td>
+          <td><code class="small">{{ e.action }}</code></td>
+          <td class="small text-secondary">{{ e.target_type or '' }}{% if e.target_id %} {{ e.target_id[:8] }}{% endif %}</td>
+          <td><span class="badge text-bg-{{ 'success' if e.outcome == 'success' else 'danger' }}">{{ e.outcome }}</span></td>
+          <td class="small text-secondary">{{ e.source_ip or '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-secondary p-3">No audit events recorded.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-secondary small">Showing {{ events | length }} events from offset {{ offset }}</span>
+    <div class="btn-group btn-group-sm">
+      <a class="btn btn-outline-secondary {{ 'disabled' if offset == 0 else '' }}"
+         href="/audit?actor={{ actor }}&offset={{ [offset - 100, 0] | max }}">Previous</a>
+      <a class="btn btn-outline-secondary {{ 'disabled' if events | length < 100 else '' }}"
+         href="/audit?actor={{ actor }}&offset={{ offset + 100 }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

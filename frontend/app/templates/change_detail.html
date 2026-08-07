@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ change.filename }} | CSAP{% endblock %}
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h1 class="h5 mb-0">{{ change.filename }}</h1>
+    <div class="text-secondary small">
+      {{ connection.name if connection else 'unknown system' }} ·
+      {% set colour = {'deployed':'success','planned':'primary','validated':'primary','invalid':'danger','failed':'danger','deploying':'info','rolled_back':'warning'} %}
+      <span class="badge text-bg-{{ colour.get(change.status, 'secondary') }}">{{ change.status }}</span>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <form method="post" action="/changes/{{ change.id }}/revalidate">
+      <button class="btn btn-sm btn-outline-secondary">Re-validate</button>
+    </form>
+    <form method="post" action="/changes/{{ change.id }}/delete"
+          onsubmit="return confirm('Delete this change request?')">
+      <button class="btn btn-sm btn-outline-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Errors</div>
+      <div class="display-6 {{ 'text-danger' if change.error_count else 'text-success' }}">{{ change.error_count }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Warnings</div>
+      <div class="display-6">{{ change.warning_count }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Planned changes</div>
+      <div class="display-6">{{ change.change_count }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Applied</div>
+      <div class="display-6">{{ (change.deployment or {}).get('applied', 0) }}</div>
+    </div></div>
+  </div>
+</div>
+
+{% if change.error_count %}
+<div class="alert alert-danger">
+  Fix the errors below in the workbook and upload it again. Deployment is blocked while errors remain.
+</div>
+{% elif change.status in ['planned', 'validated'] %}
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Deploy</div>
+  <div class="card-body">
+    <form method="post" action="/changes/{{ change.id }}/deploy" class="row g-3 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="mode">Mode</label>
+        <select class="form-select" id="mode" name="mode">
+          <option value="dry_run">Dry run — change nothing, produce a report</option>
+          <option value="apply">Apply — write changes to the device</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label" for="engine">Engine</label>
+        <select class="form-select" id="engine" name="engine">
+          <option value="rest">REST API</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-5">
+        <button class="btn btn-primary"
+                onclick="return this.form.mode.value !== 'apply' || confirm('This writes {{ change.change_count }} change(s) to {{ connection.name if connection else 'the device' }}. Continue?')">
+          Run
+        </button>
+        <span class="text-secondary small ms-2">Always dry run first.</span>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if change.deployment and not change.deployment.get('dry_run') and change.status == 'deployed' %}
+<div class="card mb-4 border-warning">
+  <div class="card-body d-flex justify-content-between align-items-center">
+    <div>
+      <div class="fw-semibold">Roll back this deployment</div>
+      <div class="text-secondary small">Reverts all {{ change.deployment.applied }} applied operations in reverse order.</div>
+    </div>
+    <form method="post" action="/changes/{{ change.id }}/rollback"
+          onsubmit="return confirm('Roll back all applied changes?')">
+      <button class="btn btn-outline-warning">Roll back</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-12 col-xl-7">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Validation findings ({{ issues | length }})</div>
+      <div class="table-responsive" style="max-height:460px">
+        <table class="table table-sm mb-0">
+          <thead class="sticky-top bg-white"><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Field</th><th>Message</th></tr></thead>
+          <tbody>
+          {% for i in issues %}
+            <tr>
+              <td><span class="badge text-bg-{{ 'danger' if i.severity == 'error' else ('warning' if i.severity == 'warning' else 'info') }}">{{ i.severity }}</span></td>
+              <td class="small">{{ i.sheet }}</td>
+              <td class="small">{{ i.row or '-' }}</td>
+              <td class="small">{{ i.field or '-' }}</td>
+              <td class="small">{{ i.message }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-success p-3">No issues. This workbook is ready to deploy.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Change plan</div>
+      <div class="table-responsive" style="max-height:460px">
+        <table class="table table-sm mb-0">
+          <thead class="sticky-top bg-white"><tr><th>Action</th><th>Sheet</th><th>Object</th></tr></thead>
+          <tbody>
+          {% set plan = change.plan or {} %}
+          {% for entry in (plan.get('creates', []) + plan.get('updates', []) + plan.get('deletes', [])) %}
+            <tr>
+              <td><span class="badge text-bg-{{ 'success' if entry.action == 'create' else ('primary' if entry.action == 'update' else 'danger') }}">{{ entry.action }}</span></td>
+              <td class="small">{{ entry.sheet }}</td>
+              <td class="small">{{ entry.name }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3" class="text-secondary p-3">No plan yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">Reports for this change</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Type</th><th>Title</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
+          <tbody>
+          {% for r in reports %}
+            <tr>
+              <td><span class="badge text-bg-secondary">{{ r.kind }}</span></td>
+              <td>{{ r.title }}</td>
+              <td class="small text-secondary">{{ r.created_at[:16].replace('T', ' ') }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="/reports/{{ r.id }}" target="_blank">View</a>
+                <a class="btn btn-sm btn-outline-secondary" href="/reports/{{ r.id }}/download">Download</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-secondary p-3">No reports yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

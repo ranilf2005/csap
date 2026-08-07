@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | CSAP{% endblock %}
+{% block content %}
+{% if must_change_password %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+  <span>You are still using the installation password. Change it before going live.</span>
+  <a class="btn btn-sm btn-warning" href="/account/password">Change password</a>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Managed systems</div>
+      <div class="display-6">{{ connections | length }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Connected</div>
+      <div class="display-6">{{ connections | selectattr('last_status', 'equalto', 'connected') | list | length }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Snapshots</div>
+      <div class="display-6">{{ snapshots | length }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-bg-light h-100"><div class="card-body">
+      <div class="text-secondary small text-uppercase">Objects captured</div>
+      <div class="display-6">{{ snapshots | sum(attribute='object_count') }}</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-xl-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Managed systems</span>
+        <a class="btn btn-sm btn-primary" href="/connections">Add system</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Name</th><th>Product</th><th>Host</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+          {% for c in connections %}
+            <tr>
+              <td>{{ c.name }}</td>
+              <td class="text-secondary small">{{ c.product }}</td>
+              <td class="text-secondary small">{{ c.host }}</td>
+              <td>
+                <span class="badge {{ 'text-bg-success' if c.last_status == 'connected' else ('text-bg-danger' if c.last_status == 'error' else 'text-bg-secondary') }}">
+                  {{ c.last_status }}
+                </span>
+              </td>
+              <td class="text-end">
+                <form method="post" action="/connections/{{ c.id }}/discover" class="d-inline">
+                  <button class="btn btn-sm btn-outline-primary">Discover</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-secondary p-3">No systems yet. <a href="/connections">Add your first FMC</a>.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Recent snapshots</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Label</th><th>Version</th><th class="text-end">Objects</th><th></th></tr></thead>
+          <tbody>
+          {% for s in snapshots %}
+            <tr>
+              <td><a href="/snapshots/{{ s.id }}">{{ s.label }}</a></td>
+              <td class="text-secondary small">{{ s.product_version or '-' }}</td>
+              <td class="text-end">{{ s.object_count }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/snapshots/{{ s.id }}/template">Template</a>
+                <form method="post" action="/snapshots/{{ s.id }}/report" class="d-inline">
+                  <button class="btn btn-sm btn-outline-secondary">Report</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-secondary p-3">Run a discovery to create your first snapshot.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">Recent jobs</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Job</th><th>Type</th><th>Status</th><th>Progress</th><th>Message</th></tr></thead>
+          <tbody>
+          {% for j in jobs %}
+            <tr>
+              <td><a href="/jobs/{{ j.id }}" class="font-monospace small">{{ j.id[:8] }}</a></td>
+              <td>{{ j.job_type }}</td>
+              <td>
+                <span class="badge {{ 'text-bg-success' if j.status == 'succeeded' else ('text-bg-danger' if j.status == 'failed' else 'text-bg-info') }}">{{ j.status }}</span>
+              </td>
+              <td style="min-width:140px">
+                <div class="progress" style="height:6px"><div class="progress-bar" style="width: {{ j.progress }}%"></div></div>
+              </td>
+              <td class="text-secondary small">{{ j.message or '' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-secondary p-3">No jobs have run yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Reports | CSAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="fw-semibold">Reports</span>
+    <div class="btn-group btn-group-sm">
+      {% for key, label in [('', 'All'), ('inventory', 'Inventory'), ('validation', 'Validation'), ('dry_run', 'Dry run'), ('deployment', 'Deployment'), ('drift', 'Drift')] %}
+        <a class="btn btn-outline-secondary {{ 'active' if kind == key else '' }}"
+           href="/reports{{ '?kind=' ~ key if key else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Type</th><th>Title</th><th>Summary</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for r in reports %}
+        <tr>
+          <td><span class="badge text-bg-secondary">{{ r.kind }}</span></td>
+          <td>{{ r.title }}</td>
+          <td class="small text-secondary">
+            {% for key, value in (r.summary or {}).items() %}{{ key }}={{ value }}{{ ', ' if not loop.last }}{% endfor %}
+          </td>
+          <td class="small text-secondary">{{ r.created_at[:16].replace('T', ' ') }}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-primary" href="/reports/{{ r.id }}" target="_blank">View</a>
+            <a class="btn btn-sm btn-outline-secondary" href="/reports/{{ r.id }}/download">Download</a>
+            <form method="post" action="/reports/{{ r.id }}/delete" class="d-inline"
+                  onsubmit="return confirm('Delete this report?')">
+              <button class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-secondary p-3">No reports yet. Run a discovery, validation or drift comparison.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

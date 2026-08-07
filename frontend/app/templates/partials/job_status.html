@@ -1,0 +1,34 @@
+<div class="d-flex align-items-center gap-2 mb-3">
+  <span class="badge {{ 'text-bg-success' if job.status == 'succeeded' else ('text-bg-danger' if job.status == 'failed' else 'text-bg-info') }}">{{ job.status }}</span>
+  <span class="text-secondary small">{{ job.message or 'waiting for a worker...' }}</span>
+</div>
+
+<div class="progress mb-3" style="height:10px">
+  <div class="progress-bar {{ 'bg-danger' if job.status == 'failed' else '' }} {{ 'progress-bar-striped progress-bar-animated' if job.status == 'running' else '' }}"
+       style="width: {{ job.progress }}%"></div>
+</div>
+
+{% if job.status == 'succeeded' and job.result %}
+  {% if job.result.snapshot_id %}
+    <a class="btn btn-primary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}">View inventory</a>
+    <a class="btn btn-outline-secondary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}/template">Download Excel template</a>
+    <table class="table table-sm mt-3 w-auto">
+      <thead><tr><th>Entity</th><th class="text-end">Count</th></tr></thead>
+      <tbody>
+        {% for key, value in (job.result.summary or {}).items() %}
+          <tr><td>{{ key }}</td><td class="text-end">{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  {% if job.result.report_id %}
+    <a class="btn btn-primary btn-sm" href="/reports/{{ job.result.report_id }}" target="_blank">Open report</a>
+  {% endif %}
+  {% if job.result.change_id %}
+    <a class="btn btn-outline-secondary btn-sm" href="/changes/{{ job.result.change_id }}">Back to change</a>
+  {% endif %}
+{% endif %}
+
+{% if job.status == 'failed' %}
+  <div class="alert alert-danger mb-0 mt-3">{{ job.message }}</div>
+{% endif %}

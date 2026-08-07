@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Systems | CSAP{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold">Add a managed system</div>
+      <div class="card-body">
+        <form method="post" action="/connections">
+          <div class="mb-3">
+            <label class="form-label" for="name">Display name</label>
+            <input class="form-control" id="name" name="name" required placeholder="DC1-FMC">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="product">Product</label>
+            <select class="form-select" id="product" name="product" required>
+              {% for p in plugins %}
+                <option value="{{ p.key }}">{{ p.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-8">
+              <label class="form-label" for="host">Hostname / IP</label>
+              <input class="form-control" id="host" name="host" required placeholder="fmc.example.com">
+            </div>
+            <div class="col-4">
+              <label class="form-label" for="port">Port</label>
+              <input class="form-control" id="port" name="port" type="number" value="443" min="1" max="65535">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="username">Username</label>
+            <input class="form-control" id="username" name="username" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-control" id="password" name="password" type="password" required autocomplete="new-password">
+            <div class="form-text">Stored encrypted with the platform key; never returned by the API.</div>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="verify_tls" name="verify_tls" checked>
+            <label class="form-check-label" for="verify_tls">Verify TLS certificate</label>
+            <div class="form-text">Uncheck only for lab systems with self-signed certificates.</div>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">Save system</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold">Registered systems</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Name</th><th>Host</th><th>Version</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <tbody>
+          {% for c in connections %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ c.name }}</div>
+                <div class="text-secondary small">{{ c.product }}</div>
+              </td>
+              <td class="small">{{ c.host }}:{{ c.port }}{% if not c.verify_tls %}<span class="badge text-bg-warning ms-1">no TLS check</span>{% endif %}</td>
+              <td class="small">{{ c.detected_version or '-' }}</td>
+              <td>
+                <span class="badge {{ 'text-bg-success' if c.last_status == 'connected' else ('text-bg-danger' if c.last_status == 'error' else 'text-bg-secondary') }}">{{ c.last_status }}</span>
+                {% if c.last_error %}<div class="text-danger small mt-1">{{ c.last_error }}</div>{% endif %}
+              </td>
+              <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-outline-secondary"
+                        hx-post="/connections/{{ c.id }}/test"
+                        hx-target="#result-{{ c.id }}"
+                        hx-indicator="#spin-{{ c.id }}">Test</button>
+                <form method="post" action="/connections/{{ c.id }}/discover" class="d-inline">
+                  <button class="btn btn-sm btn-outline-primary">Discover</button>
+                </form>
+                <form method="post" action="/connections/{{ c.id }}/delete" class="d-inline"
+                      onsubmit="return confirm('Remove {{ c.name }} and all of its snapshots?')">
+                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+                <span id="spin-{{ c.id }}" class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+                <div id="result-{{ c.id }}" class="mt-1"></div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-secondary p-3">Nothing registered yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

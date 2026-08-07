@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.id[:8] }} | CSAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between">
+    <span class="fw-semibold">{{ job.job_type | replace('_', ' ') | capitalize }} job
+      <span class="font-monospace">{{ job.id[:8] }}</span></span>
+    <a class="btn btn-sm btn-outline-secondary" href="/">Back to dashboard</a>
+  </div>
+  <div class="card-body"
+       hx-get="/jobs/{{ job.id }}/status"
+       hx-trigger="load, every 3s"
+       hx-swap="innerHTML">
+    {% include "partials/job_status.html" %}
+  </div>
+</div>
+{% endblock %}

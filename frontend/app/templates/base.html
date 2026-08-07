@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Cisco Security Automation Platform{% endblock %}</title>
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  <script src="/static/vendor/bootstrap.bundle.min.js" defer></script>
+</head>
+<body class="bg-body-tertiary">
+{% if user %}
+<nav class="navbar navbar-expand-lg csap-navbar">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold" href="/">CSAP</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/connections">Systems</a></li>
+        <li class="nav-item"><a class="nav-link" href="/changes">Changes</a></li>
+        <li class="nav-item"><a class="nav-link" href="/drift">Drift</a></li>
+        <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
+        <li class="nav-item"><a class="nav-link" href="/audit">Audit</a></li>
+      </ul>
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">{{ user }}</button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="/account/password">Change password</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="/logout">Sign out</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<main class="container-fluid py-4">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

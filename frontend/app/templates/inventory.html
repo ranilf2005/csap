@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Inventory | CSAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span class="fw-semibold">{{ snapshot.label if snapshot else 'Inventory' }}</span>
+    <form class="d-flex gap-2" method="get" action="/snapshots/{{ snapshot.id if snapshot else '' }}">
+      <input class="form-control form-control-sm" name="search" value="{{ search }}" placeholder="Search by name">
+      <select class="form-select form-select-sm" name="item_type" onchange="this.form.submit()">
+        <option value="">All types</option>
+        {% for key in (snapshot.summary or {}).keys() %}
+          <option value="{{ key }}" {{ 'selected' if key == item_type else '' }}>{{ key }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary">Filter</button>
+      <a class="btn btn-sm btn-outline-secondary text-nowrap" href="/snapshots/{{ snapshot.id if snapshot else '' }}/template">Excel template</a>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle mb-0">
+      <thead><tr><th>Type</th><th>Name</th><th>Details</th></tr></thead>
+      <tbody>
+      {% for item in page.items %}
+        <tr>
+          <td><span class="badge text-bg-secondary">{{ item.item_type }}</span></td>
+          <td>{{ item.name or '-' }}</td>
+          <td class="small text-secondary">
+            {{ item.payload.get('value') or item.payload.get('description') or item.payload.get('action') or '' }}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="text-secondary p-3">No matching objects.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-secondary small">
+      Showing {{ page.meta.offset + 1 if page.items else 0 }}-{{ page.meta.offset + page.items | length }} of {{ page.meta.total }}
+    </span>
+    <div class="btn-group btn-group-sm">
+      {% set base = '/snapshots/' ~ (snapshot.id if snapshot else '') ~ '?item_type=' ~ item_type ~ '&search=' ~ search %}
+      <a class="btn btn-outline-secondary {{ 'disabled' if offset == 0 else '' }}"
+         href="{{ base }}&offset={{ [offset - page.meta.limit, 0] | max }}">Previous</a>
+      <a class="btn btn-outline-secondary {{ 'disabled' if offset + page.meta.limit >= page.meta.total else '' }}"
+         href="{{ base }}&offset={{ offset + page.meta.limit }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

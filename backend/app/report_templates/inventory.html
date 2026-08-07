@@ -1,0 +1,42 @@
+{% extends "_base.html" %}
+{% block content %}
+
+<section>
+  <div class="cards">
+    <div class="card"><div class="label">Snapshot</div><div class="value" style="font-size:15px">{{ snapshot.label }}</div></div>
+    <div class="card"><div class="label">Objects</div><div class="value">{{ snapshot.object_count }}</div></div>
+    <div class="card"><div class="label">Product version</div><div class="value" style="font-size:16px">{{ snapshot.product_version or 'unknown' }}</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Inventory by type</h2>
+  <table>
+    <thead><tr><th>Entity type</th><th>Count</th></tr></thead>
+    <tbody>
+      {% for key, value in (snapshot.summary or {}).items() %}
+      <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Objects ({{ items | length }})</h2>
+  {% if items %}
+  <table>
+    <thead><tr><th>Type</th><th>Name</th><th>Value / detail</th></tr></thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><span class="badge b-neutral">{{ item.item_type }}</span></td>
+        <td><strong>{{ item.name or '-' }}</strong></td>
+        <td>{{ item.payload.get('value') or item.payload.get('description') or item.payload.get('action') or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">This snapshot is empty.</div>{% endif %}
+</section>
+
+{% endblock %}

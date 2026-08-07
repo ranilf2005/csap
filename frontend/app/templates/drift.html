@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Drift | CSAP{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold">Compare two snapshots</div>
+      <div class="card-body">
+        {% if snapshots | length < 2 %}
+          <div class="alert alert-info mb-0">
+            You need at least two snapshots of the same system. Run a discovery, make a change, then run another discovery.
+          </div>
+        {% else %}
+        <form method="post" action="/drift">
+          <div class="mb-3">
+            <label class="form-label" for="baseline_snapshot_id">Baseline (older)</label>
+            <select class="form-select" id="baseline_snapshot_id" name="baseline_snapshot_id" required>
+              {% for s in snapshots %}
+                <option value="{{ s.id }}">{{ s.label }} — {{ s.object_count }} objects</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="current_snapshot_id">Current (newer)</label>
+            <select class="form-select" id="current_snapshot_id" name="current_snapshot_id" required>
+              {% for s in snapshots %}
+                <option value="{{ s.id }}" {{ 'selected' if loop.first else '' }}>{{ s.label }} — {{ s.object_count }} objects</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-primary w-100">Compare</button>
+          <div class="form-text">Both snapshots must belong to the same managed system.</div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold">Previous drift reports</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Report</th><th>Added</th><th>Removed</th><th>Modified</th><th>Created</th><th></th></tr></thead>
+          <tbody>
+          {% for r in reports %}
+            <tr>
+              <td>{{ r.title }}</td>
+              <td>{{ (r.summary or {}).get('added', 0) }}</td>
+              <td>{{ (r.summary or {}).get('removed', 0) }}</td>
+              <td>{{ (r.summary or {}).get('modified', 0) }}</td>
+              <td class="small text-secondary">{{ r.created_at[:16].replace('T', ' ') }}</td>
+              <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/reports/{{ r.id }}" target="_blank">View</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="text-secondary p-3">No drift comparisons have been run yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

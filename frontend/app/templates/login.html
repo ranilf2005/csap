@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Sign in | CSAP{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-10 col-md-6 col-lg-4">
+    <div class="card shadow-sm mt-5">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-1">Cisco Security Automation Platform</h1>
+        <p class="text-secondary small mb-4">Sign in to continue</p>
+
+        {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+
+        <form method="post" action="/login">
+          <div class="mb-3">
+            <label class="form-label" for="email">Email</label>
+            <input class="form-control" id="email" name="email" type="email" required autofocus autocomplete="username">
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-control" id="password" name="password" type="password" required autocomplete="current-password">
+          </div>
+          <button class="btn btn-primary w-100" type="submit">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+:root {
+  --csap-navy: #0d274d;
+  --csap-blue: #0d6efd;
+}
+
+.csap-navbar {
+  background: linear-gradient(90deg, var(--csap-navy), #14508c);
+}
+
+.csap-navbar .navbar-brand,
+.csap-navbar .nav-link,
+.csap-navbar .navbar-text {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.csap-navbar .nav-link:hover {
+  color: #fff;
+}
+
+.card {
+  border: 1px solid rgba(13, 39, 77, 0.08);
+  border-radius: 0.6rem;
+}
+
+.card-header {
+  background: #fff;
+  border-bottom: 1px solid rgba(13, 39, 77, 0.08);
+}
+
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}

@@ -1,0 +1,76 @@
+{% extends "_base.html" %}
+{% block content %}
+
+<section>
+  <div class="cards">
+    <div class="card"><div class="label">Workbook</div><div class="value" style="font-size:15px">{{ change.filename }}</div></div>
+    <div class="card"><div class="label">Errors</div><div class="value" style="color:{{ '#a01b1b' if change.error_count else '#106b32' }}">{{ change.error_count }}</div></div>
+    <div class="card"><div class="label">Warnings</div><div class="value">{{ change.warning_count }}</div></div>
+    <div class="card"><div class="label">Planned changes</div><div class="value">{{ change.change_count }}</div></div>
+    <div class="card"><div class="label">Status</div><div class="value" style="font-size:15px">{{ change.status }}</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Validated against</h2>
+  <div class="body">
+    Snapshot <strong>{{ snapshot.label }}</strong>
+    &middot; {{ snapshot.object_count }} objects
+    &middot; product version {{ snapshot.product_version or 'unknown' }}
+  </div>
+</section>
+
+<section>
+  <h2>Findings ({{ issues | length }})</h2>
+  {% if issues %}
+  <table>
+    <thead><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Field</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for issue in issues %}
+      <tr>
+        <td><span class="badge b-{{ issue.severity }}">{{ issue.severity }}</span></td>
+        <td>{{ issue.sheet }}</td>
+        <td>{{ issue.row if issue.row else '-' }}</td>
+        <td>{{ issue.field or '-' }}</td>
+        <td>{{ issue.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No issues found. The workbook is ready to deploy.</div>
+  {% endif %}
+</section>
+
+{% if change.plan %}
+<section>
+  <h2>Change plan</h2>
+  <table>
+    <thead><tr><th>Action</th><th>Sheet</th><th>Object</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for entry in change.plan.creates + change.plan.updates + change.plan.deletes %}
+      <tr>
+        <td><span class="badge b-neutral">{{ entry.action }}</span></td>
+        <td>{{ entry.sheet }}</td>
+        <td><strong>{{ entry.name }}</strong></td>
+        <td><code>{{ entry.payload if entry.payload else entry.id }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section>
+  <h2>Rows read from the workbook</h2>
+  <table>
+    <thead><tr><th>Sheet</th><th>Rows</th></tr></thead>
+    <tbody>
+      {% for sheet, records in rows.items() %}
+      <tr><td>{{ sheet }}</td><td>{{ records | length }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

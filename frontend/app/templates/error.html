@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Error {{ code }} | CSAP{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6">
+    <div class="card mt-5">
+      <div class="card-body text-center p-5">
+        <div class="display-5 text-secondary">{{ code }}</div>
+        <p class="mt-3">{{ message }}</p>
+        <a class="btn btn-primary" href="/">Back to dashboard</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

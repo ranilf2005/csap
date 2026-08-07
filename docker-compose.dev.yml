@@ -1,0 +1,43 @@
+# Development overrides:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Adds live reload, source bind-mounts and direct port access.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    command: ["sh", "-c", "python -m app.bootstrap && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+    entrypoint: []
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./backend/app:/app/app
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ./backend
+    volumes:
+      - ./backend/app:/app/app
+
+  frontend:
+    build:
+      context: ./frontend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+    environment:
+      ENVIRONMENT: development
+    volumes:
+      - ./frontend/app/templates:/app/app/templates
+      - ./frontend/app/static/css:/app/app/static/css
+    ports:
+      - "8080:8080"
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

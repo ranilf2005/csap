@@ -1,0 +1,69 @@
+{% extends "_base.html" %}
+{% block content %}
+
+<section>
+  <div class="cards">
+    <div class="card"><div class="label">Mode</div><div class="value" style="font-size:16px">{{ 'Dry run' if result.dry_run else 'Applied' }}</div></div>
+    <div class="card"><div class="label">Engine</div><div class="value" style="font-size:16px">{{ result.engine }}</div></div>
+    <div class="card"><div class="label">Operations</div><div class="value">{{ result.details | length }}</div></div>
+    <div class="card"><div class="label">Succeeded</div><div class="value" style="color:#106b32">{{ result.applied }}</div></div>
+    <div class="card"><div class="label">Failed</div><div class="value" style="color:{{ '#a01b1b' if result.failed else '#455468' }}">{{ result.failed }}</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Operations</h2>
+  {% if result.details %}
+  <table>
+    <thead><tr><th>Status</th><th>Action</th><th>Object</th><th>Type</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for entry in result.details %}
+      <tr>
+        <td><span class="badge b-{{ entry.status }}">{{ entry.status }}</span></td>
+        <td>{{ entry.action }}</td>
+        <td><strong>{{ entry.name }}</strong></td>
+        <td>{{ entry.entity }}</td>
+        <td>
+          {% if entry.error %}<span style="color:#a01b1b">{{ entry.error }}</span>
+          {% elif entry.payload %}<code>{{ entry.payload }}</code>
+          {% else %}<code>{{ entry.id }}</code>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">This plan contained no operations.</div>
+  {% endif %}
+</section>
+
+{% if result.rollback %}
+<section>
+  <h2>Rollback</h2>
+  <div class="body">Reverted {{ result.rollback.reverted }}, failed {{ result.rollback.failed }}.</div>
+  <table>
+    <thead><tr><th>Status</th><th>Object</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for entry in result.rollback.details %}
+      <tr>
+        <td><span class="badge b-{{ entry.status }}">{{ entry.status }}</span></td>
+        <td>{{ entry.name }}</td>
+        <td>{{ entry.error or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if result.dry_run %}
+<section>
+  <h2>Next step</h2>
+  <div class="body">
+    Nothing was changed on the device. Review the operations above, then re-run the
+    deployment with dry run disabled to apply them.
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

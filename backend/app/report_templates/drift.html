@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+{% block content %}
+
+<section>
+  <div class="cards">
+    <div class="card"><div class="label">Result</div>
+      <div class="value" style="font-size:16px;color:{{ '#8a5b00' if drift.has_drift else '#106b32' }}">
+        {{ 'Drift detected' if drift.has_drift else 'No drift' }}
+      </div></div>
+    <div class="card"><div class="label">Added</div><div class="value">{{ drift.counts.added }}</div></div>
+    <div class="card"><div class="label">Removed</div><div class="value">{{ drift.counts.removed }}</div></div>
+    <div class="card"><div class="label">Modified</div><div class="value">{{ drift.counts.modified }}</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Compared snapshots</h2>
+  <table>
+    <thead><tr><th>Role</th><th>Snapshot</th><th>Objects</th><th>Version</th><th>Taken</th></tr></thead>
+    <tbody>
+      <tr><td>Baseline</td><td>{{ baseline.label }}</td><td>{{ baseline.object_count }}</td>
+          <td>{{ baseline.product_version or '-' }}</td><td>{{ baseline.created_at }}</td></tr>
+      <tr><td>Current</td><td>{{ current.label }}</td><td>{{ current.object_count }}</td>
+          <td>{{ current.product_version or '-' }}</td><td>{{ current.created_at }}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Added since baseline ({{ drift.added | length }})</h2>
+  {% if drift.added %}
+  <table>
+    <thead><tr><th>Type</th><th>Name</th></tr></thead>
+    <tbody>
+      {% for row in drift.added %}
+      <tr><td><span class="badge b-ok">{{ row.item_type }}</span></td><td>{{ row.name }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Nothing was added.</div>{% endif %}
+</section>
+
+<section>
+  <h2>Removed since baseline ({{ drift.removed | length }})</h2>
+  {% if drift.removed %}
+  <table>
+    <thead><tr><th>Type</th><th>Name</th></tr></thead>
+    <tbody>
+      {% for row in drift.removed %}
+      <tr><td><span class="badge b-error">{{ row.item_type }}</span></td><td>{{ row.name }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Nothing was removed.</div>{% endif %}
+</section>
+
+<section>
+  <h2>Modified since baseline ({{ drift.modified | length }})</h2>
+  {% if drift.modified %}
+  <table>
+    <thead><tr><th>Type</th><th>Name</th><th>Fields</th><th>Before</th><th>After</th></tr></thead>
+    <tbody>
+      {% for row in drift.modified %}
+      <tr>
+        <td><span class="badge b-warning">{{ row.item_type }}</span></td>
+        <td><strong>{{ row.name }}</strong></td>
+        <td>{{ row.fields | join(', ') }}</td>
+        <td><code>{{ row.before }}</code></td>
+        <td><code>{{ row.after }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">Nothing was modified.</div>{% endif %}
+</section>
+
+{% endblock %}

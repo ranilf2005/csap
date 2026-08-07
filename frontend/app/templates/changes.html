@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Changes | CSAP{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-header fw-semibold">Upload a change workbook</div>
+      <div class="card-body">
+        <form method="post" action="/changes" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label" for="connection_id">Target system</label>
+            <select class="form-select" id="connection_id" name="connection_id" required>
+              {% for c in connections %}
+                <option value="{{ c.id }}" {{ 'disabled' if c.id not in ready else '' }}>
+                  {{ c.name }}{% if c.id not in ready %} — run a discovery first{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="file">Workbook (.xlsx)</label>
+            <input class="form-control" id="file" name="file" type="file" accept=".xlsx,.xlsm" required>
+            <div class="form-text">Download the template from a snapshot, fill in the action column, then upload it here.</div>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">Upload and validate</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header fw-semibold">How it works</div>
+      <div class="card-body small text-secondary">
+        <ol class="mb-0 ps-3">
+          <li>Discover the system to create a snapshot.</li>
+          <li>Download the dynamic Excel template.</li>
+          <li>Set <code>action</code> to create, update or delete on each row.</li>
+          <li>Upload here — CSAP validates against the snapshot.</li>
+          <li>Run a dry run, review the report, then apply.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card">
+      <div class="card-header fw-semibold">Change requests</div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Workbook</th><th>System</th><th>Status</th><th class="text-end">Errors</th><th class="text-end">Warnings</th><th class="text-end">Changes</th><th></th></tr></thead>
+          <tbody>
+          {% for ch in changes %}
+            <tr>
+              <td><a href="/changes/{{ ch.id }}">{{ ch.filename }}</a>
+                  <div class="text-secondary small">{{ ch.created_at[:16].replace('T', ' ') }}</div></td>
+              <td class="small">{{ by_connection.get(ch.connection_id, {}).get('name', '-') }}</td>
+              <td>
+                {% set colour = {'deployed':'success','planned':'primary','validated':'primary','invalid':'danger','failed':'danger','deploying':'info','rolled_back':'warning'} %}
+                <span class="badge text-bg-{{ colour.get(ch.status, 'secondary') }}">{{ ch.status }}</span>
+              </td>
+              <td class="text-end {{ 'text-danger fw-semibold' if ch.error_count else '' }}">{{ ch.error_count }}</td>
+              <td class="text-end">{{ ch.warning_count }}</td>
+              <td class="text-end">{{ ch.change_count }}</td>
+              <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="/changes/{{ ch.id }}">Open</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7" class="text-secondary p-3">No change requests yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

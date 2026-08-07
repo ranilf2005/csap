@@ -1,0 +1,15 @@
+# Normalise text files in the repo
+* text=auto eol=lf
+
+# These MUST stay LF or they break inside Linux containers
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.conf          text eol=lf
+entrypoint.sh   text eol=lf
+Makefile        text eol=lf
+
+# Binary
+*.xlsx  binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
