@@ -19,11 +19,11 @@ def test_secure_firewall_plugin_is_registered():
     assert "secure_firewall" in keys
 
 
-def test_template_spec_drops_absent_entity_sheets():
+def test_every_deployable_sheet_is_always_present():
+    """An empty category still needs somewhere to add the first object."""
     plugin = registry.get("secure_firewall")
     spec = plugin.template_spec(_discovery())
-    assert "Hosts" in spec
-    assert "Ranges" not in spec  # no ranges discovered
+    assert {"Hosts", "Networks", "Ranges", "Ports", "NetworkGroups"} <= set(spec)
 
 
 def test_workbook_is_generated_for_every_sheet():

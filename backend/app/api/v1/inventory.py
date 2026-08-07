@@ -4,9 +4,9 @@ from sqlalchemy import func
 from app.api.deps import CurrentUser, DbSession
 from app.models import Connection, InventoryItem, Report, Snapshot
 from app.plugins import registry
-from app.plugins.base import DiscoveryResult
 from app.schemas import InventoryItemOut, InventoryPage, PageMeta, ReportOut, SnapshotOut
 from app.services import reports
+from app.services.changes import discovery_from_snapshot
 from app.services.templates import build_workbook
 
 router = APIRouter(tags=["inventory"])
@@ -52,16 +52,20 @@ def get_inventory(
 
 @router.get("/snapshots/{snapshot_id}/template")
 def download_template(snapshot_id: str, _user: CurrentUser, db: DbSession) -> Response:
-    """Generate the dynamic Excel change template for a snapshot."""
+    """Generate the Excel workbook for a snapshot, pre-filled with its current configuration."""
     snapshot = db.get(Snapshot, snapshot_id)
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
 
     plugin = registry.get(snapshot.product)
-    spec = plugin.template_spec(
-        DiscoveryResult(product_version=snapshot.product_version, summary=snapshot.summary or {})
+    discovery = discovery_from_snapshot(db, snapshot)
+    content = build_workbook(
+        plugin.template_spec(discovery),
+        snapshot.product,
+        snapshot.product_version,
+        existing=plugin.existing_rows(discovery),
+        reference_sheets=set(plugin.reference_sheets),
     )
-    content = build_workbook(spec, snapshot.product, snapshot.product_version)
 
     connection = db.get(Connection, snapshot.connection_id)
     stem = (connection.name if connection else snapshot.product).replace(" ", "_")

@@ -103,6 +103,9 @@ class SecurityPlugin(ABC):
 
     manifest: PluginManifest
 
+    #: Template sheets shown for reference but not yet deployable.
+    reference_sheets: frozenset[str] = frozenset()
+
     @abstractmethod
     def test_connection(self, ctx: ConnectionContext) -> ConnectionResult:
         """Authenticate and return the detected product version."""
@@ -114,6 +117,13 @@ class SecurityPlugin(ABC):
     @abstractmethod
     def template_spec(self, discovery: DiscoveryResult | None = None) -> dict[str, list[str]]:
         """Sheet name -> column headers, used to build the dynamic Excel workbook."""
+
+    def existing_rows(self, discovery: DiscoveryResult) -> dict[str, list[dict[str, Any]]]:
+        """Current configuration as workbook rows, so users can see and edit what already exists.
+
+        Rows are written with a blank `action`, which the validator ignores.
+        """
+        return {}
 
     @abstractmethod
     def validate(self, rows: dict[str, list[dict[str, Any]]], discovery: DiscoveryResult) -> ValidationResult:

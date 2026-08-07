@@ -189,6 +189,9 @@ class FmcClient:
     def list_nat_policies(self) -> list[dict[str, Any]]:
         return self.get_paginated(self.cfg("policy/ftdnatpolicies"))
 
+    def list_nat_rules(self, policy_id: str) -> list[dict[str, Any]]:
+        return self.get_paginated(self.cfg(f"policy/ftdnatpolicies/{policy_id}/natrules"))
+
     def create_object(self, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("POST", self.cfg(f"object/{kind}"), json=payload)
 

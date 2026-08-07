@@ -49,8 +49,14 @@ APPLY_ORDER = ["Hosts", "Networks", "Ranges", "Ports", "NetworkGroups"]
 VALID_ACTIONS = {"create", "update", "delete"}
 GROUP_MEMBER_ENTITIES = ("host", "network", "range", "network_group")
 
-# Sheets the template offers for planning but that cannot be deployed yet.
-UNSUPPORTED_SHEETS = {"AccessRules": "0.4 (access rule support)"}
+# Entities whose workbook row is just name + a single value field.
+VALUE_OBJECT_SHEETS = {"host": "Hosts", "network": "Networks", "range": "Ranges"}
+
+# Sheets the template offers for reference but that cannot be deployed yet.
+UNSUPPORTED_SHEETS = {
+    "AccessRules": "0.4 (access rule support)",
+    "NatRules": "0.4 (NAT rule support)",
+}
 
 
 class SecureFirewallPlugin(SecurityPlugin):
@@ -62,6 +68,8 @@ class SecureFirewallPlugin(SecurityPlugin):
         entity_types=(*OBJECT_KINDS.values(), "device", "access_policy", "access_rule", "nat_policy"),
         min_product_version="6.7",
     )
+
+    reference_sheets = frozenset(UNSUPPORTED_SHEETS)
 
     # -- connect -----------------------------------------------------------
     def _client(self, ctx: ConnectionContext) -> FmcClient:
@@ -147,6 +155,18 @@ class SecureFirewallPlugin(SecurityPlugin):
                 nat = fmc.list_nat_policies()
                 summary["nat_policy"] = len(nat)
                 items.extend(self._as_items("nat_policy", nat))
+
+                nat_rules: list[dict[str, Any]] = []
+                for policy in nat:
+                    try:
+                        for rule in fmc.list_nat_rules(policy["id"]):
+                            rule["_policyName"] = policy.get("name")
+                            rule["_policyId"] = policy.get("id")
+                            nat_rules.append(rule)
+                    except FmcError as exc:
+                        logger.warning("could not read NAT rules for %s: %s", policy.get("name"), exc)
+                summary["nat_rule"] = len(nat_rules)
+                items.extend(self._as_items("nat_rule", nat_rules))
             except FmcError as exc:
                 logger.warning("could not read NAT policies: %s", exc)
 
@@ -167,12 +187,14 @@ class SecureFirewallPlugin(SecurityPlugin):
 
     # -- dynamic Excel template -------------------------------------------
     def template_spec(self, discovery: DiscoveryResult | None = None) -> dict[str, list[str]]:
-        spec: dict[str, list[str]] = {
+        # Every deployable sheet is always present: an empty category still needs a
+        # place to add the first object.
+        return {
             "Hosts": ["action", "name", "value", "description"],
             "Networks": ["action", "name", "value", "description"],
             "Ranges": ["action", "name", "value", "description"],
-            "NetworkGroups": ["action", "name", "members", "description"],
             "Ports": ["action", "name", "protocol", "port", "description"],
+            "NetworkGroups": ["action", "name", "members", "description"],
             "AccessRules": [
                 "action",
                 "policy",
@@ -189,15 +211,117 @@ class SecureFirewallPlugin(SecurityPlugin):
                 "log_end",
                 "comment",
             ],
+            "NatRules": [
+                "action",
+                "policy",
+                "rule_name",
+                "nat_type",
+                "source_interface",
+                "destination_interface",
+                "original_source",
+                "translated_source",
+                "original_destination",
+                "translated_destination",
+                "enabled",
+            ],
         }
-        # Only surface sheets for object types this FMC actually exposes.
-        if discovery and discovery.summary:
-            present = discovery.summary
-            if not present.get("range"):
-                spec.pop("Ranges", None)
-            if not present.get("port"):
-                spec.pop("Ports", None)
-        return spec
+
+    # -- current configuration as rows -------------------------------------
+    @staticmethod
+    def _names(container: Any, literal_key: str = "value") -> str:
+        """Flatten an FMC {objects:[...], literals:[...]} container into a readable list."""
+        if not isinstance(container, dict):
+            return ""
+        parts = [str(o.get("name", "")) for o in container.get("objects") or []]
+        parts += [
+            str(lit.get(literal_key) or lit.get("value") or "")
+            for lit in container.get("literals") or []
+        ]
+        return ", ".join(p for p in parts if p)
+
+    @staticmethod
+    def _name_of(value: Any) -> str:
+        if isinstance(value, dict):
+            return str(value.get("name") or value.get("value") or "")
+        if isinstance(value, list):
+            return ", ".join(str(v.get("name") or v.get("value") or "") for v in value if isinstance(v, dict))
+        return ""
+
+    def existing_rows(self, discovery: DiscoveryResult) -> dict[str, list[dict[str, Any]]]:
+        rows: dict[str, list[dict[str, Any]]] = {sheet: [] for sheet in self.template_spec()}
+
+        for item in discovery.items:
+            entity = item.get("item_type")
+            payload = item.get("payload") or {}
+            name = item.get("name") or ""
+            description = payload.get("description", "") or ""
+
+            if entity in VALUE_OBJECT_SHEETS:
+                rows[VALUE_OBJECT_SHEETS[entity]].append(
+                    {
+                        "action": "",
+                        "name": name,
+                        "value": payload.get("value", ""),
+                        "description": description,
+                    }
+                )
+            elif entity == "port":
+                rows["Ports"].append(
+                    {
+                        "action": "",
+                        "name": name,
+                        "protocol": payload.get("protocol", ""),
+                        "port": payload.get("port", ""),
+                        "description": description,
+                    }
+                )
+            elif entity == "network_group":
+                rows["NetworkGroups"].append(
+                    {
+                        "action": "",
+                        "name": name,
+                        "members": self._names(payload),
+                        "description": description,
+                    }
+                )
+            elif entity == "access_rule":
+                applications = (payload.get("applications") or {}).get("applications") or []
+                rows["AccessRules"].append(
+                    {
+                        "action": "",
+                        "policy": payload.get("_policyName", ""),
+                        "rule_name": name,
+                        "rule_action": payload.get("action", ""),
+                        "enabled": payload.get("enabled", ""),
+                        "source_networks": self._names(payload.get("sourceNetworks")),
+                        "destination_networks": self._names(payload.get("destinationNetworks")),
+                        "source_ports": self._names(payload.get("sourcePorts")),
+                        "destination_ports": self._names(payload.get("destinationPorts")),
+                        "applications": ", ".join(str(a.get("name", "")) for a in applications),
+                        "urls": self._names(payload.get("urls"), literal_key="url"),
+                        "log_begin": payload.get("logBegin", ""),
+                        "log_end": payload.get("logEnd", ""),
+                        "comment": "",
+                    }
+                )
+            elif entity == "nat_rule":
+                rows["NatRules"].append(
+                    {
+                        "action": "",
+                        "policy": payload.get("_policyName", ""),
+                        "rule_name": name or payload.get("id", ""),
+                        "nat_type": payload.get("natType", "") or payload.get("type", ""),
+                        "source_interface": self._name_of(payload.get("sourceInterface")),
+                        "destination_interface": self._name_of(payload.get("destinationInterface")),
+                        "original_source": self._name_of(payload.get("originalSource")),
+                        "translated_source": self._name_of(payload.get("translatedSource")),
+                        "original_destination": self._name_of(payload.get("originalDestination")),
+                        "translated_destination": self._name_of(payload.get("translatedDestination")),
+                        "enabled": payload.get("enabled", ""),
+                    }
+                )
+
+        return rows
 
     # -- helpers -----------------------------------------------------------
     @staticmethod
