@@ -139,3 +139,25 @@ def test_unimplemented_engines_fail_loudly():
         PLUGIN.deploy(ctx=None, plan=plan, engine="ansible", dry_run=True)  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         PLUGIN.deploy(ctx=None, plan=plan, engine="carrier-pigeon", dry_run=True)  # type: ignore[arg-type]
+
+
+def test_populated_but_undeployable_sheet_warns_instead_of_silently_ignoring():
+    rows = {
+        "AccessRules": [
+            {"action": "create", "policy": "ACP1", "rule_name": "allow-web"},
+            {"action": "create", "policy": "ACP1", "rule_name": "allow-dns"},
+            {"action": "", "policy": "", "rule_name": ""},
+        ]
+    }
+    result = PLUGIN.validate(rows, _discovery())
+
+    assert result.is_valid  # a warning must not block the rest of the workbook
+    warnings = [i for i in result.issues if i.severity == "warning"]
+    assert len(warnings) == 1
+    assert "2 row(s)" in warnings[0].message
+    assert warnings[0].sheet == "AccessRules"
+
+
+def test_empty_unsupported_sheet_is_silent():
+    rows = {"AccessRules": [{"action": "", "rule_name": ""}]}
+    assert PLUGIN.validate(rows, _discovery()).issues == []

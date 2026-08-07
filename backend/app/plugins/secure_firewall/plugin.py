@@ -49,6 +49,9 @@ APPLY_ORDER = ["Hosts", "Networks", "Ranges", "Ports", "NetworkGroups"]
 VALID_ACTIONS = {"create", "update", "delete"}
 GROUP_MEMBER_ENTITIES = ("host", "network", "range", "network_group")
 
+# Sheets the template offers for planning but that cannot be deployed yet.
+UNSUPPORTED_SHEETS = {"AccessRules": "0.4 (access rule support)"}
+
 
 class SecureFirewallPlugin(SecurityPlugin):
     manifest = PluginManifest(
@@ -210,10 +213,35 @@ class SecureFirewallPlugin(SecurityPlugin):
     def _members(raw: Any) -> list[str]:
         return [part.strip() for part in str(raw or "").replace(";", ",").split(",") if part.strip()]
 
+    @staticmethod
+    def _unsupported_sheet_warnings(
+        rows: dict[str, list[dict[str, Any]]],
+    ) -> list[ValidationIssue]:
+        """Say so loudly when a populated sheet is not deployable yet, instead of silently ignoring it."""
+        issues: list[ValidationIssue] = []
+        for sheet, records in rows.items():
+            if sheet in SHEET_MAP:
+                continue
+            populated = sum(1 for r in records if str(r.get("action", "")).strip())
+            if populated:
+                issues.append(
+                    ValidationIssue(
+                        "warning",
+                        sheet,
+                        None,
+                        None,
+                        f"{populated} row(s) on '{sheet}' were ignored: this sheet is not deployable "
+                        f"in {UNSUPPORTED_SHEETS.get(sheet, 'this release')}",
+                    )
+                )
+        return issues
+
     # -- validation --------------------------------------------------------
     def validate(self, rows: dict[str, list[dict[str, Any]]], discovery: DiscoveryResult) -> ValidationResult:
         issues: list[ValidationIssue] = []
         existing = self._index(discovery)
+
+        issues.extend(self._unsupported_sheet_warnings(rows))
 
         # Names this workbook will create, so groups may reference them.
         pending: set[tuple[str, str]] = set()
