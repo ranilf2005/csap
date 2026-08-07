@@ -83,8 +83,11 @@
               <td><a href="/snapshots/{{ s.id }}">{{ s.label }}</a></td>
               <td class="text-secondary small">{{ s.product_version or '-' }}</td>
               <td class="text-end">{{ s.object_count }}</td>
-              <td class="text-end">
-                <a class="btn btn-sm btn-outline-secondary" href="/snapshots/{{ s.id }}/template">Template</a>
+              <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-primary" href="/snapshots/{{ s.id }}/export"
+                   title="Excel workbook pre-filled with the current configuration">Config</a>
+                <a class="btn btn-sm btn-outline-secondary" href="/snapshots/{{ s.id }}/template"
+                   title="Empty Excel workbook with headers only">Blank</a>
                 <form method="post" action="/snapshots/{{ s.id }}/report" class="d-inline">
                   <button class="btn btn-sm btn-outline-secondary">Report</button>
                 </form>

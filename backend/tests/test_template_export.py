@@ -70,6 +70,17 @@ def test_objects_are_written_with_a_blank_action():
     assert rows[1][1:] == ["WEB01", "10.1.1.1", "web"]
 
 
+def test_blank_template_has_headers_but_no_rows():
+    discovery = _discovery()
+    blank = build_workbook(PLUGIN.template_spec(discovery), "secure_firewall", "7.4.1")
+    sheets = _sheets(blank)
+
+    assert sheets["Hosts"][0] == ["action", "name", "value", "description"]
+    for name, rows in sheets.items():
+        if name != "README":
+            assert len(rows) == 1, f"{name} should contain only a header row"
+
+
 def test_group_members_are_readable_names_not_ids():
     members = _sheets(_built())["NetworkGroups"][1][2]
     assert "WEB01" in members

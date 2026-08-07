@@ -11,7 +11,8 @@
 {% if job.status == 'succeeded' and job.result %}
   {% if job.result.snapshot_id %}
     <a class="btn btn-primary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}">View inventory</a>
-    <a class="btn btn-outline-secondary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}/template">Download Excel template</a>
+    <a class="btn btn-outline-primary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}/export">Download current configuration</a>
+    <a class="btn btn-outline-secondary btn-sm" href="/snapshots/{{ job.result.snapshot_id }}/template">Download blank template</a>
     <table class="table table-sm mt-3 w-auto">
       <thead><tr><th>Entity</th><th class="text-end">Count</th></tr></thead>
       <tbody>

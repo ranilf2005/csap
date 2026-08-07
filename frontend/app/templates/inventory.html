@@ -13,7 +13,10 @@
         {% endfor %}
       </select>
       <button class="btn btn-sm btn-primary">Filter</button>
-      <a class="btn btn-sm btn-outline-secondary text-nowrap" href="/snapshots/{{ snapshot.id if snapshot else '' }}/template">Excel template</a>
+      <a class="btn btn-sm btn-outline-primary text-nowrap" href="/snapshots/{{ snapshot.id if snapshot else '' }}/export"
+         title="Excel workbook pre-filled with the current configuration">Current config</a>
+      <a class="btn btn-sm btn-outline-secondary text-nowrap" href="/snapshots/{{ snapshot.id if snapshot else '' }}/template"
+         title="Empty Excel workbook with headers only">Blank template</a>
     </form>
   </div>
 

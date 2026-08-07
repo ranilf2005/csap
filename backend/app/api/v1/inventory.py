@@ -50,9 +50,9 @@ def get_inventory(
     )
 
 
-@router.get("/snapshots/{snapshot_id}/template")
-def download_template(snapshot_id: str, _user: CurrentUser, db: DbSession) -> Response:
-    """Generate the Excel workbook for a snapshot, pre-filled with its current configuration."""
+def _workbook_response(
+    db: DbSession, snapshot_id: str, *, populated: bool
+) -> Response:
     snapshot = db.get(Snapshot, snapshot_id)
     if snapshot is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
@@ -63,17 +63,30 @@ def download_template(snapshot_id: str, _user: CurrentUser, db: DbSession) -> Re
         plugin.template_spec(discovery),
         snapshot.product,
         snapshot.product_version,
-        existing=plugin.existing_rows(discovery),
+        existing=plugin.existing_rows(discovery) if populated else None,
         reference_sheets=set(plugin.reference_sheets),
     )
 
     connection = db.get(Connection, snapshot.connection_id)
     stem = (connection.name if connection else snapshot.product).replace(" ", "_")
+    suffix = "current_config" if populated else "blank_template"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{stem}_changes.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{stem}_{suffix}.xlsx"'},
     )
+
+
+@router.get("/snapshots/{snapshot_id}/template")
+def download_template(snapshot_id: str, _user: CurrentUser, db: DbSession) -> Response:
+    """Empty workbook: correct sheets and headers, no rows. For bulk additions."""
+    return _workbook_response(db, snapshot_id, populated=False)
+
+
+@router.get("/snapshots/{snapshot_id}/export")
+def export_configuration(snapshot_id: str, _user: CurrentUser, db: DbSession) -> Response:
+    """Workbook pre-filled with everything in the snapshot, ready to edit in place."""
+    return _workbook_response(db, snapshot_id, populated=True)
 
 
 @router.post("/snapshots/{snapshot_id}/report", response_model=ReportOut, status_code=status.HTTP_201_CREATED)

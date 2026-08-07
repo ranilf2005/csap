@@ -216,9 +216,18 @@ async def inventory_page(
 
 @app.get("/snapshots/{snapshot_id}/template")
 async def download_template(request: Request, snapshot_id: str) -> Response:
-    resp = await api(request, "GET", f"/api/v1/snapshots/{snapshot_id}/template", raw=True)
+    return await _workbook(request, snapshot_id, "template")
+
+
+@app.get("/snapshots/{snapshot_id}/export")
+async def download_export(request: Request, snapshot_id: str) -> Response:
+    return await _workbook(request, snapshot_id, "export")
+
+
+async def _workbook(request: Request, snapshot_id: str, kind: str) -> Response:
+    resp = await api(request, "GET", f"/api/v1/snapshots/{snapshot_id}/{kind}", raw=True)
     if resp.status_code >= 400:
-        raise HTTPException(resp.status_code, "Could not generate the template")
+        raise HTTPException(resp.status_code, "Could not generate the workbook")
     return Response(
         content=resp.content,
         media_type=resp.headers.get("content-type"),
