@@ -138,6 +138,7 @@ class ValidationIssueOut(BaseModel):
     row: int | None = None
     field: str | None = None
     message: str
+    remediation: str = ""
 
 
 class ChangeRequestOut(ORMModel):

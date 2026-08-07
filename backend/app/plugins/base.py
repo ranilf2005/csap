@@ -66,6 +66,7 @@ class ValidationIssue:
     row: int | None
     field: str | None
     message: str
+    remediation: str = ""  # what the user should actually do about it
 
 
 @dataclass

@@ -2,12 +2,14 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import Response
 
 from app.api.deps import CurrentUser, DbSession, record_audit
 from app.models import ChangeRequest, Connection, Job
 from app.schemas import ChangeRequestOut, ChangeRequestSummary, DeployRequest, JobOut
 from app.services import changes as change_service
 from app.services.storage import safe_filename, uploads_dir
+from app.services.templates import build_findings_workbook
 from app.workers.tasks import deploy_task, rollback_task
 
 logger = logging.getLogger(__name__)
@@ -107,6 +109,30 @@ def list_changes(
 @router.get("/{change_id}", response_model=ChangeRequestOut)
 def get_change(change_id: str, _user: CurrentUser, db: DbSession) -> ChangeRequest:
     return _get_or_404(db, change_id)
+
+
+@router.get("/{change_id}/findings")
+def download_findings(change_id: str, _user: CurrentUser, db: DbSession) -> Response:
+    """Every finding as a spreadsheet, including what to do about each one."""
+    change = _get_or_404(db, change_id)
+    connection = db.get(Connection, change.connection_id)
+
+    content = build_findings_workbook(
+        (change.validation or {}).get("issues", []),
+        change.filename,
+        connection.name if connection else "unknown system",
+        {
+            "errors": change.error_count,
+            "warnings": change.warning_count,
+            "changes": change.change_count,
+        },
+    )
+    stem = safe_filename(change.filename.rsplit(".", 1)[0], "changes")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{stem}_findings.xlsx"'},
+    )
 
 
 @router.post("/{change_id}/revalidate", response_model=ChangeRequestOut)

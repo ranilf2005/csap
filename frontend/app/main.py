@@ -306,6 +306,18 @@ async def revalidate_change(request: Request, change_id: str) -> Response:
     return RedirectResponse(f"/changes/{change_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@app.get("/changes/{change_id}/findings")
+async def download_findings(request: Request, change_id: str) -> Response:
+    resp = await api(request, "GET", f"/api/v1/changes/{change_id}/findings", raw=True)
+    if resp.status_code >= 400:
+        raise HTTPException(resp.status_code, "Could not generate the findings workbook")
+    return Response(
+        content=resp.content,
+        media_type=resp.headers.get("content-type"),
+        headers={"Content-Disposition": resp.headers.get("content-disposition", "attachment")},
+    )
+
+
 @app.post("/changes/{change_id}/deploy")
 async def deploy_change(
     request: Request, change_id: str, mode: str = Form("dry_run"), engine: str = Form("rest")

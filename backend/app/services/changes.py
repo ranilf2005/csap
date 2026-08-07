@@ -68,7 +68,11 @@ def validate_change(db: Session, change: ChangeRequest, actor: str | None = None
         change.error_count = 1
         change.validation = {
             "issues": [
-                {"severity": "error", "sheet": "-", "row": None, "field": None, "message": str(exc)}
+                {
+                    "severity": "error", "sheet": "-", "row": None, "field": None,
+                    "message": str(exc),
+                    "remediation": "Re-download the template, copy your rows into it and upload again.",
+                }
             ]
         }
         db.commit()
@@ -82,6 +86,7 @@ def validate_change(db: Session, change: ChangeRequest, actor: str | None = None
             "row": issue.row,
             "field": issue.field,
             "message": issue.message,
+            "remediation": issue.remediation,
         }
         for issue in result.issues
     ]

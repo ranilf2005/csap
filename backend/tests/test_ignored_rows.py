@@ -28,6 +28,11 @@ def _messages(rows, severity=None):
     return [i.message for i in issues if severity is None or i.severity == severity]
 
 
+def _fixes(rows, severity=None):
+    issues = PLUGIN.validate(rows, _discovery()).issues
+    return [i.remediation for i in issues if severity is None or i.severity == severity]
+
+
 def test_unchanged_export_produces_no_noise():
     rows = {
         "Hosts": [{"action": "", "name": "WEB01", "value": "10.1.1.1", "description": "web"}],
@@ -38,15 +43,14 @@ def test_unchanged_export_produces_no_noise():
 
 def test_edited_row_without_an_action_is_flagged():
     rows = {"Hosts": [{"action": "", "name": "WEB01", "value": "10.9.9.9", "description": "web"}]}
-    warnings = _messages(rows, "warning")
-    assert any("differs from the FMC" in m and "value" in m for m in warnings)
-    assert any("action=update" in m for m in warnings)
+    assert any("differs from the FMC" in m and "value" in m for m in _messages(rows, "warning"))
+    assert any("update" in f for f in _fixes(rows, "warning"))
 
 
 def test_new_row_without_an_action_is_flagged():
     rows = {"Hosts": [{"action": "", "name": "APP99", "value": "10.4.4.4", "description": ""}]}
-    warnings = _messages(rows, "warning")
-    assert any("not on the FMC" in m and "action=create" in m for m in warnings)
+    assert any("not on the FMC" in m for m in _messages(rows, "warning"))
+    assert any("create" in f for f in _fixes(rows, "warning"))
 
 
 def test_duplicate_rows_are_errors_even_with_no_action():

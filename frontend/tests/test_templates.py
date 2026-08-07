@@ -88,7 +88,8 @@ CASES = {
     "change_detail.html": {
         "change": CHANGE, "connection": CONNECTION, "reports": [REPORT],
         "issues": [{"severity": "warning", "sheet": "Hosts", "row": 3,
-                    "field": "name", "message": "still a member of group WEB-TIER"}],
+                    "field": "name", "message": "still a member of group WEB-TIER",
+                    "remediation": "Remove it from the group in the same upload."}],
     },
     "reports.html": {"reports": [REPORT], "kind": ""},
     "drift.html": {

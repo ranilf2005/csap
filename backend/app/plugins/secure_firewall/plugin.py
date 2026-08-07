@@ -63,8 +63,8 @@ COMPARE_FIELDS = {
 
 # Sheets the template offers for reference but that cannot be deployed yet.
 UNSUPPORTED_SHEETS = {
-    "AccessRules": "0.4 (access rule support)",
-    "NatRules": "0.4 (NAT rule support)",
+    "AccessRules": "release 0.4",
+    "NatRules": "release 0.4",
 }
 
 
@@ -366,14 +366,17 @@ class SecureFirewallPlugin(SecurityPlugin):
                 continue
             populated = sum(1 for r in records if str(r.get("action", "")).strip())
             if populated:
+                planned = UNSUPPORTED_SHEETS.get(sheet, "a future release")
                 issues.append(
                     ValidationIssue(
                         "warning",
                         sheet,
                         None,
                         None,
-                        f"{populated} row(s) on '{sheet}' were ignored: this sheet is not deployable "
-                        f"in {UNSUPPORTED_SHEETS.get(sheet, 'this release')}",
+                        f"'{sheet}' is reference only in this release, so {populated} row(s) with an "
+                        "action were ignored. Nothing on this sheet will be deployed.",
+                        f"No action needed for the rest of the workbook to deploy. Make these "
+                        f"changes directly in FMC for now; automation is planned for {planned}.",
                     )
                 )
         return issues
@@ -407,7 +410,10 @@ class SecureFirewallPlugin(SecurityPlugin):
                     if name.lower() in seen:
                         issues.append(
                             ValidationIssue(
-                                "error", sheet, index, "name", f"duplicate of row {seen[name.lower()]}"
+                                "error", sheet, index, "name",
+                                f"duplicate of row {seen[name.lower()]}",
+                                f"Delete this row or row {seen[name.lower()]}, or rename one of them. "
+                                "Each object may appear only once per sheet.",
                             )
                         )
                     seen.setdefault(name.lower(), index)
@@ -423,22 +429,40 @@ class SecureFirewallPlugin(SecurityPlugin):
                 if action not in VALID_ACTIONS:
                     issues.append(
                         ValidationIssue(
-                            "error", sheet, index, "action", f"'{action}' is not create, update or delete"
+                            "error", sheet, index, "action",
+                            f"'{action}' is not create, update or delete",
+                            "Set the action cell to create, update or delete. "
+                            "Leave it empty to ignore the row.",
                         )
                     )
                     continue
                 if not name:
-                    issues.append(ValidationIssue("error", sheet, index, "name", "name is required"))
+                    issues.append(
+                        ValidationIssue(
+                            "error", sheet, index, "name", "name is required",
+                            "Enter the object name, or clear the action cell to ignore this row.",
+                        )
+                    )
                     continue
 
                 key = (entity, name.lower())
                 if action == "create" and key in existing:
                     issues.append(
-                        ValidationIssue("error", sheet, index, "name", f"'{name}' already exists on the FMC")
+                        ValidationIssue(
+                            "error", sheet, index, "name",
+                            f"'{name}' already exists on the FMC",
+                            "Change action to update to modify the existing object, "
+                            "or choose a different name to create a new one.",
+                        )
                     )
                 if action in {"update", "delete"} and key not in existing:
                     issues.append(
-                        ValidationIssue("error", sheet, index, "name", f"'{name}' does not exist on the FMC")
+                        ValidationIssue(
+                            "error", sheet, index, "name",
+                            f"'{name}' does not exist on the FMC",
+                            "Check the spelling against the exported configuration, "
+                            "or change action to create to add it.",
+                        )
                     )
 
                 if action == "delete":
@@ -469,8 +493,9 @@ class SecureFirewallPlugin(SecurityPlugin):
                 return [
                     ValidationIssue(
                         "warning", sheet, index, "action",
-                        f"'{name}' is not on the FMC and 'action' is blank, so this row is ignored. "
-                        "Set action=create to add it.",
+                        f"'{name}' is not on the FMC and 'action' is blank, so this row is ignored.",
+                        f"Type create in the action cell of row {index} to add this object, "
+                        "then upload the workbook again.",
                     )
                 ]
             return []
@@ -484,7 +509,9 @@ class SecureFirewallPlugin(SecurityPlugin):
                 ValidationIssue(
                     "warning", sheet, index, "action",
                     f"'{name}' differs from the FMC ({', '.join(changed)}) but 'action' is blank, "
-                    "so this row is ignored. Set action=update to apply it.",
+                    "so this row is ignored.",
+                    f"Type update in the action cell of row {index} to apply your edit, "
+                    f"or restore the original value to leave it unchanged.",
                 )
             ]
         return []
@@ -502,47 +529,83 @@ class SecureFirewallPlugin(SecurityPlugin):
 
         if sheet == "Hosts":
             if not value:
-                issues.append(ValidationIssue("error", sheet, index, "value", "value is required"))
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "value", "value is required",
+                        "Enter a single IP address, for example 10.1.1.20.",
+                    )
+                )
             else:
                 try:
                     ipaddress.ip_address(value)
                 except ValueError:
                     issues.append(
                         ValidationIssue(
-                            "error", sheet, index, "value", f"'{value}' is not a valid IP address"
+                            "error", sheet, index, "value", f"'{value}' is not a valid IP address",
+                            "Enter one IPv4 or IPv6 address with no prefix, for example 10.1.1.20. "
+                            "Use the Networks sheet for subnets.",
                         )
                     )
 
         elif sheet == "Networks":
             if not value:
-                issues.append(ValidationIssue("error", sheet, index, "value", "value is required"))
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "value", "value is required",
+                        "Enter a subnet in CIDR form, for example 10.2.0.0/24.",
+                    )
+                )
             elif "/" not in value:
                 issues.append(
-                    ValidationIssue("error", sheet, index, "value", "a prefix length is required, e.g. /24")
+                    ValidationIssue(
+                        "error", sheet, index, "value", "a prefix length is required, e.g. /24",
+                        f"Change '{value}' to include a prefix, for example '{value}/24'. "
+                        "Use the Hosts sheet for a single address.",
+                    )
                 )
             else:
                 try:
                     ipaddress.ip_network(value, strict=True)
                 except ValueError as exc:
-                    severity = "warning" if "host bits set" in str(exc) else "error"
+                    host_bits = "host bits set" in str(exc)
+                    network = ""
+                    if host_bits:
+                        network = str(ipaddress.ip_network(value, strict=False))
                     issues.append(
-                        ValidationIssue(severity, sheet, index, "value", f"'{value}': {exc}")
+                        ValidationIssue(
+                            "warning" if host_bits else "error",
+                            sheet, index, "value", f"'{value}': {exc}",
+                            f"Use the network address '{network}' instead." if host_bits
+                            else "Enter a valid subnet in CIDR form, for example 10.2.0.0/24.",
+                        )
                     )
 
         elif sheet == "Ranges":
             parts = value.split("-")
             if len(parts) != 2:
-                issues.append(ValidationIssue("error", sheet, index, "value", "expected format 'start-end'"))
+                issues.append(
+                    ValidationIssue(
+                        "error", sheet, index, "value", "expected format 'start-end'",
+                        "Enter two addresses separated by a hyphen, for example "
+                        "10.1.1.10-10.1.1.50.",
+                    )
+                )
             else:
                 try:
                     start, end = (ipaddress.ip_address(p.strip()) for p in parts)
                     if end < start:
                         issues.append(
-                            ValidationIssue("error", sheet, index, "value", "end address is before start")
+                            ValidationIssue(
+                                "error", sheet, index, "value", "end address is before start",
+                                f"Swap them so the range reads '{end}-{start}'.",
+                            )
                         )
                 except ValueError:
                     issues.append(
-                        ValidationIssue("error", sheet, index, "value", f"'{value}' contains an invalid IP")
+                        ValidationIssue(
+                            "error", sheet, index, "value", f"'{value}' contains an invalid IP",
+                            "Check both addresses, for example 10.1.1.10-10.1.1.50.",
+                        )
                     )
 
         elif sheet == "Ports":
@@ -550,18 +613,28 @@ class SecureFirewallPlugin(SecurityPlugin):
             port = str(row.get("port", "")).strip()
             if protocol not in {"TCP", "UDP"}:
                 issues.append(
-                    ValidationIssue("error", sheet, index, "protocol", "protocol must be TCP or UDP")
+                    ValidationIssue(
+                        "error", sheet, index, "protocol", "protocol must be TCP or UDP",
+                        "Set the protocol cell to TCP or UDP.",
+                    )
                 )
             if not self._is_valid_port(port):
                 issues.append(
-                    ValidationIssue("error", sheet, index, "port", f"'{port}' is not a valid port or range")
+                    ValidationIssue(
+                        "error", sheet, index, "port", f"'{port}' is not a valid port or range",
+                        "Enter a number from 1 to 65535, or a range such as 8080-8090.",
+                    )
                 )
 
         elif sheet == "NetworkGroups":
             members = self._members(row.get("members"))
             if not members:
                 issues.append(
-                    ValidationIssue("error", sheet, index, "members", "at least one member is required")
+                    ValidationIssue(
+                        "error", sheet, index, "members", "at least one member is required",
+                        "List the member object names separated by commas, "
+                        "for example 'WEB01, WEB02, DMZ-NET'.",
+                    )
                 )
             for member in members:
                 key = member.lower()
@@ -571,7 +644,11 @@ class SecureFirewallPlugin(SecurityPlugin):
                 )
                 if not known:
                     issues.append(
-                        ValidationIssue("error", sheet, index, "members", f"member '{member}' does not exist")
+                        ValidationIssue(
+                            "error", sheet, index, "members", f"member '{member}' does not exist",
+                            f"Correct the spelling of '{member}', or add a row with action=create "
+                            "for it on the Hosts, Networks or Ranges sheet.",
+                        )
                     )
         return issues
 
@@ -609,6 +686,8 @@ class SecureFirewallPlugin(SecurityPlugin):
                             index,
                             "name",
                             f"'{name}' is still a member of group '{item.get('name')}'",
+                            f"Remove '{name}' from '{item.get('name')}' on the NetworkGroups sheet "
+                            "in the same upload, otherwise the FMC will reject the delete.",
                         )
                     ]
         return []

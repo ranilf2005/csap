@@ -111,10 +111,17 @@
 <div class="row g-4">
   <div class="col-12 col-xl-7">
     <div class="card h-100">
-      <div class="card-header fw-semibold">Validation findings ({{ issues | length }})</div>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Validation findings ({{ issues | length }})</span>
+        {% if issues %}
+        <a class="btn btn-sm btn-outline-primary" href="/changes/{{ change.id }}/findings">
+          Download findings (Excel)
+        </a>
+        {% endif %}
+      </div>
       <div class="table-responsive" style="max-height:460px">
         <table class="table table-sm mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Field</th><th>Message</th></tr></thead>
+          <thead class="sticky-top bg-white"><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Column</th><th>What is wrong</th><th>What you should do</th></tr></thead>
           <tbody>
           {% for i in issues %}
             <tr>
@@ -123,9 +130,10 @@
               <td class="small">{{ i.row or '-' }}</td>
               <td class="small">{{ i.field or '-' }}</td>
               <td class="small">{{ i.message }}</td>
+              <td class="small text-secondary">{{ i.remediation or '' }}</td>
             </tr>
           {% else %}
-            <tr><td colspan="5" class="text-success p-3">No issues. This workbook is ready to deploy.</td></tr>
+            <tr><td colspan="6" class="text-success p-3">No issues. This workbook is ready to deploy.</td></tr>
           {% endfor %}
           </tbody>
         </table>

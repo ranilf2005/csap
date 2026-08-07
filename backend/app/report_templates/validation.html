@@ -24,7 +24,7 @@
   <h2>Findings ({{ issues | length }})</h2>
   {% if issues %}
   <table>
-    <thead><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Field</th><th>Message</th></tr></thead>
+    <thead><tr><th>Severity</th><th>Sheet</th><th>Row</th><th>Column</th><th>What is wrong</th><th>What you should do</th></tr></thead>
     <tbody>
       {% for issue in issues %}
       <tr>
@@ -33,6 +33,7 @@
         <td>{{ issue.row if issue.row else '-' }}</td>
         <td>{{ issue.field or '-' }}</td>
         <td>{{ issue.message }}</td>
+        <td>{{ issue.remediation or '' }}</td>
       </tr>
       {% endfor %}
     </tbody>
