@@ -4,6 +4,7 @@ Cisco Security Automation Platform — plugin-based automation for the Cisco sec
 
 | Guide | Read this if you want to... |
 |---|---|
+| [**Quick start**](customer-quickstart.md) | **Install and test it yourself, start to finish** |
 | [Installation](installation.md) | Stand the platform up on an Ubuntu server |
 | [Testing on Ubuntu](testing-on-ubuntu.md) | Run a full end-to-end test, with or without a real FMC |
 | [Web UI guide](user-guide.md) | Learn every screen and the day-to-day workflow |

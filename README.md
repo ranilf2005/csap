@@ -28,6 +28,7 @@ Nothing is written to a device until you explicitly choose *Apply* and confirm.
 
 | Guide | For |
 |---|---|
+| [**Quick start**](docs/customer-quickstart.md) | **Customers: install and test end to end** |
 | [Installation](docs/installation.md) | Standing it up on Ubuntu |
 | [Testing on Ubuntu](docs/testing-on-ubuntu.md) | End-to-end test plan, with or without an FMC |
 | [Web UI guide](docs/user-guide.md) | Every screen and the daily workflow |
