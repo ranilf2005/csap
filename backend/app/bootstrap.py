@@ -24,10 +24,22 @@ def wait_for_db(attempts: int = 30, delay: float = 2.0) -> None:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             return
-        except OperationalError:
+        except OperationalError as exc:
+            # Retrying a rejected password just hides the real problem for five minutes.
+            if "password authentication failed" in str(exc).lower():
+                raise SystemExit(
+                    "PostgreSQL rejected the credentials in DATABASE_URL.\n"
+                    "This usually means an existing database volume was initialised with a "
+                    "different POSTGRES_PASSWORD - postgres only applies that variable when it "
+                    "creates an empty data directory.\n"
+                    "Either restore the .env those credentials came from, or delete the old "
+                    "volume with 'docker compose down -v' (this destroys all CSAP data)."
+                ) from exc
             logger.info("waiting for postgres (%s/%s)...", attempt, attempts)
             time.sleep(delay)
-    raise SystemExit("database never became available")
+    raise SystemExit(
+        f"database was unreachable after {attempts} attempts; check 'docker compose logs postgres'"
+    )
 
 
 def seed_admin() -> None:

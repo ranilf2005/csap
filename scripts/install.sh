@@ -37,6 +37,25 @@ gen_fernet() { openssl rand -base64 32 | tr '+/' '-_'; }   # url-safe base64, 44
 gen_pass()   { openssl rand -base64 24 | tr -d '/+=' | cut -c1-24; }
 
 if [[ ! -f .env ]]; then
+  # A leftover database still holds the OLD password: postgres only applies
+  # POSTGRES_PASSWORD when it initialises an empty data directory.
+  if docker volume inspect csap_postgres_data >/dev/null 2>&1; then
+    die "$(cat <<'MSG'
+A CSAP database volume already exists, but this directory has no .env.
+
+Generating new secrets here would leave the backend unable to authenticate to
+that existing database, and it would fail to start.
+
+Choose one:
+  * Reuse the existing install - run install.sh from the directory that owns
+    the matching .env, or copy that .env here first.
+  * Start over and DELETE all existing CSAP data:
+        docker compose down -v --remove-orphans
+    then re-run this installer.
+MSG
+)"
+  fi
+
   log "Creating .env with freshly generated secrets..."
   cp .env.example .env
 
